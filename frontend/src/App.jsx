@@ -1,14 +1,24 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React from 'react'
+import LoginPage from './pages/LoginPage'
+import StudentRegister from './components/StudentRegister'
+import ForgotPassword from './components/ForgotPassword'
+import AlumniRegister from './components/AlumniRegister'
 
-function App() {
-  const [count, setCount] = useState(0)
+import { BrowserRouter,Routes,Route } from 'react-router-dom'
 
-  return (
-    <div class="text-center bg-blue-500">Hello, Tailwind!</div>
-  )
-}
+
+
+const App = () => (
+  
+  <BrowserRouter>
+   <Routes>
+    <Route path="/"element={<LoginPage/>}/>
+    <Route path="/StudentRegister"element={<StudentRegister/>}/>
+    <Route path="/AlumniRegister"element={<AlumniRegister/>}/>
+    <Route path="/ForgotPassword"element={<ForgotPassword/>}/>
+   </Routes>
+  </BrowserRouter>
+  
+)
 
 export default App
