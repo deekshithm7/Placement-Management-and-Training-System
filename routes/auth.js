@@ -8,7 +8,9 @@ const admin = require('firebase-admin');
 const { authenticate } = require('../middleware/auth');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: "smtp-relay.brevo.com",
+      port: 587,
+      secure: false,
   auth: {
     user: process.env.NODEMAILER_EMAIL,
     pass: process.env.NODEMAILER_PASS,
@@ -18,17 +20,22 @@ const transporter = nodemailer.createTransport({
 // Check if email is allowed and not registered
 router.post('/check-email', async (req, res) => {
   const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required', allowed: false, exists: false });
+  }
   try {
-    const allowed = await AllowedEmail.findOne({ email });
+    console.log('Checking email against allowedEmails:', email);
+    const allowed = await AllowedEmail.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
     if (!allowed) {
-      console.log('Email not allowed:', email);
+      console.log('Email not found in allowedEmails:', email);
       return res.status(403).json({ message: 'Email not allowed', allowed: false, exists: false });
     }
-    const exists = await User.findOne({ email });
+    console.log('Email allowed:', { email, role: allowed.role });
+    const exists = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
     res.json({ allowed: true, exists: !!exists, role: allowed.role });
   } catch (err) {
     console.error('Check email error:', err);
-    res.status(500).json({ message: 'Error checking email: ' + err.message });
+    res.status(500).json({ message: 'Server error during email check: ' + err.message });
   }
 });
 

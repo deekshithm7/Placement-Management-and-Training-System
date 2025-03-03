@@ -6,6 +6,6 @@ const allowedEmailSchema = new mongoose.Schema({
   addedAt: { type: Date, default: Date.now },
 });
 
-allowedEmailSchema.index({ email: 1 }); // Index for faster lookups
+allowedEmailSchema.index({ email: 1 });
 
 module.exports = mongoose.model('AllowedEmail', allowedEmailSchema);
