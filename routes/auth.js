@@ -1,54 +1,56 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const AllowedEmail = require('../models/AllowedEmail');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const admin = require('firebase-admin');
 const { authenticate } = require('../middleware/auth');
 
 const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-      port: 587,
-      secure: false,
+  service: 'gmail',
   auth: {
     user: process.env.NODEMAILER_EMAIL,
     pass: process.env.NODEMAILER_PASS,
   },
 });
 
-// Check if user exists in users collection
-router.post('/check-user', async (req, res) => {
+// Check if email is allowed and not registered
+router.post('/check-email', async (req, res) => {
   const { email } = req.body;
   try {
-    const user = await User.findOne({ email });
-    res.json({ exists: !!user });
+    const allowed = await AllowedEmail.findOne({ email });
+    if (!allowed) {
+      console.log('Email not allowed:', email);
+      return res.status(403).json({ message: 'Email not allowed', allowed: false, exists: false });
+    }
+    const exists = await User.findOne({ email });
+    res.json({ allowed: true, exists: !!exists, role: allowed.role });
   } catch (err) {
-    res.status(500).json({ message: 'Error checking user: ' + err.message });
+    console.error('Check email error:', err);
+    res.status(500).json({ message: 'Error checking email: ' + err.message });
   }
 });
 
-// Send OTP without creating user
-router.post('/send-otp', async (req, res) => {
-  const { name, year, branch, email, password, role } = req.body;
-  console.log('Send OTP request:', { name, year, branch, email, role });
+// Send OTP for registration
+router.post('/send-registration-otp', async (req, res) => {
+  const { email } = req.body;
+  console.log('Send OTP request:', { email });
 
   try {
-    if (role === 'Student' && !email.endsWith('@gcek.ac.in')) {
-      return res.status(400).json({ grievance: 'Email must end with @gcek.ac.in for students' });
-    }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+    const allowed = await AllowedEmail.findOne({ email });
+    if (!allowed) {
+      console.log('Email not allowed:', email);
+      return res.status(403).json({ message: 'Email not allowed' });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpToken = jwt.sign({ name, year, branch, email, password, role, otp }, process.env.JWT_SECRET, { expiresIn: '10m' });
+    const otpToken = jwt.sign({ email, role: allowed.role, otp }, process.env.JWT_SECRET, { expiresIn: '10m' });
 
     await transporter.sendMail({
       from: process.env.NODEMAILER_EMAIL,
       to: email,
-      subject: 'Your OTP Code',
+      subject: 'Your Registration OTP',
       text: `Your OTP is ${otp}. It expires in 10 minutes.`,
     });
     console.log('OTP email sent to:', email, 'OTP:', otp);
@@ -60,69 +62,44 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-// Verify OTP and register user
-router.post('/verify-and-register', async (req, res) => {
-  const { name, year, branch, email, password, role, otpToken, otp } = req.body;
-  console.log('Verify and register request:', { name, year, branch, email, role, otpToken, otp });
+// Verify OTP and set password
+router.post('/verify-and-set-password', async (req, res) => {
+  const { email, otp, password, otpToken } = req.body;
+  console.log('Verify and set password request:', { email, otpToken });
 
   try {
-    console.log('Verifying OTP token:', otpToken);
     const decoded = jwt.verify(otpToken, process.env.JWT_SECRET);
     console.log('Decoded token:', decoded);
 
-    if (decoded.otp !== otp) {
+    if (decoded.otp !== otp || decoded.email !== email) {
       console.log('OTP mismatch:', { decodedOtp: decoded.otp, providedOtp: otp });
       return res.status(400).json({ message: 'Invalid OTP' });
     }
 
-    if (
-      decoded.name !== name ||
-      decoded.year !== year ||
-      decoded.branch !== branch ||
-      decoded.email !== email ||
-      decoded.password !== password ||
-      decoded.role !== role
-    ) {
-      console.log('Data mismatch:', { decoded, request: { name, year, branch, email, password, role } });
-      return res.status(400).json({ message: 'Invalid registration data' });
+    let user = await User.findOne({ email });
+    if (user) {
+      // User exists (e.g., from Google Sign-In), link password
+      console.log('Linking password to existing user:', email);
+      await admin.auth().updateUser(user.firebaseUid, { password });
+      user.isVerified = true;
+      await user.save();
+    } else {
+      // New user, create with email/password
+      console.log('Creating new Firebase user:', { email });
+      const firebaseUser = await admin.auth().createUser({ email, password });
+      user = new User({
+        firebaseUid: firebaseUser.uid,
+        email,
+        role: decoded.role,
+        isVerified: true,
+      });
+      await user.save();
+      console.log('New user registered:', user);
     }
 
-    if (role === 'Student' && !email.endsWith('@gcek.ac.in')) {
-      return res.status(400).json({ message: 'Email must end with @gcek.ac.in for students' });
-    }
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      console.log('User already exists:', existingUser);
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    console.log('Creating Firebase user:', { email });
-    const firebaseUser = await admin.auth().createUser({
-      email,
-      password,
-    }).catch(err => {
-      console.error('Firebase creation error:', err);
-      if (err.code === 'auth/email-already-exists') {
-        throw new Error('Email already in use in Firebase');
-      }
-      throw err;
-    });
-    console.log('Firebase user created:', firebaseUser.uid);
-
-    const user = new User({
-      firebaseUid: firebaseUser.uid,
-      email,
-      role,
-      name,
-      isVerified: true,
-    });
-    await user.save();
-    console.log('User registered:', user);
-
-    res.status(200).json({ message: 'User registered successfully' });
+    res.status(200).json({ message: 'Password set successfully' });
   } catch (err) {
-    console.error('Verify and register error:', err);
+    console.error('Verify and set password error:', err);
     res.status(500).json({ message: 'Registration failed: ' + err.message });
   }
 });
@@ -151,12 +128,10 @@ router.post('/google-login', async (req, res) => {
 
     let user = await User.findOne({ email });
     if (user) {
-      // Check if requested role matches existing role
       if (user.role !== role) {
         console.log(`Role mismatch: Existing role "${user.role}" does not match requested role "${role}"`);
         return res.status(403).json({ message: 'Role mismatch: User registered with a different role' });
       }
-      // Link Google provider if firebaseUid differs
       if (user.firebaseUid !== firebaseUid) {
         console.log('Linking Google provider to existing user:', user.email);
         await admin.auth().updateUser(user.firebaseUid, {
@@ -169,10 +144,14 @@ router.post('/google-login', async (req, res) => {
         console.log('User updated with Google link:', user);
       }
     } else {
-      // Only create new user for Student or Alumni roles
       if (role === 'Coordinator' || role === 'Advisor') {
         console.log(`No existing ${role} found for email:`, email);
         return res.status(403).json({ message: 'Not allowed: Coordinator/Advisor must exist in database' });
+      }
+      const allowed = await AllowedEmail.findOne({ email });
+      if (!allowed) {
+        console.log('Email not allowed for new user:', email);
+        return res.status(403).json({ message: 'Unauthorized email: Not in allowed list' });
       }
       user = new User({
         firebaseUid,
