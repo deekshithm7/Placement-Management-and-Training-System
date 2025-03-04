@@ -1,97 +1,168 @@
+// backend/server.js
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const admin = require('firebase-admin');
-const serviceAccount = require('./pmts0-186c0-firebase-adminsdk-fbsvc-693468005c.json');
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
 const User = require('./models/User');
-const AllowedEmail = require('./models/AllowedEmail');
 
 const app = express();
-
-try {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  console.log('Firebase Admin initialized successfully');
-} catch (err) {
-  console.error('Firebase Admin initialization failed:', err);
-}
+const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false },
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(new LocalStrategy(
+  { usernameField: 'email' },
+  async (email, password, done) => {
+    try {
+      const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+      if (!user) {
+        console.log(`[LOGIN FAILED] Email: ${email}, Reason: User not found`);
+        return done(null, false, { message: 'User not found' });
+      }
+      if (!user.registered) {
+        console.log(`[LOGIN FAILED] Email: ${email}, Reason: User not registered`);
+        return done(null, false, { message: 'User not registered' });
+      }
+      if (!user.password) {
+        console.log(`[LOGIN FAILED] Email: ${email}, Reason: No password set`);
+        return done(null, false, { message: 'No password set, please register' });
+      }
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        console.log(`[LOGIN FAILED] Email: ${email}, Reason: Invalid password`);
+        return done(null, false, { message: 'Invalid credentials' });
+      }
+      console.log(`[LOGIN SUCCESS] Email: ${email}, Role: ${user.role}`);
+      return done(null, user);
+    } catch (err) {
+      console.error(`[LOGIN ERROR] Email: ${email}, Error: ${err.message}`);
+      return done(err);
+    }
+  }
+));
+
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: `http://localhost:${PORT}/auth/google/callback`,
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    let user = await User.findOne({ googleId: profile.id });
+    if (!user) {
+      user = await User.findOne({ email: { $regex: new RegExp(`^${profile.emails[0].value}$`, 'i') } });
+      if (user) {
+        if (!user.registered) return done(null, false, { message: 'User not registered' });
+        user.googleId = profile.id;
+        await user.save();
+      } else {
+        console.log(`[GOOGLE LOGIN FAILED] Email: ${profile.emails[0].value}, Reason: Email not in allowed list`);
+        return done(null, false, { message: 'Email not in allowed users list' });
+      }
+    }
+    console.log(`[GOOGLE LOGIN SUCCESS] Email: ${user.email}, Role: ${user.role}`);
+    return done(null, user);
+  } catch (err) {
+    console.error(`[GOOGLE LOGIN ERROR] Error: ${err.message}`);
+    return done(err);
+  }
+}));
+
+passport.serializeUser((user, done) => {
+  console.log(`[SERIALIZE] User ID: ${user.id}`);
+  done(null, user.id);
+});
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    console.log(`[DESERIALIZE] User ID: ${id}, Found: ${user ? user.email : 'Not found'}`);
+    done(null, user);
+  } catch (err) {
+    console.error(`[DESERIALIZE ERROR] ID: ${id}, Error: ${err.message}`);
+    done(err);
+  }
+});
 
 mongoose
   .connect(process.env.MONGO_URI || 'mongodb://localhost:27017/ptest')
   .then(async () => {
     console.log('MongoDB connected');
-
-    // Seed allowedEmails if empty
-    const allowedCount = await AllowedEmail.countDocuments();
-    if (allowedCount === 0) {
-      console.log('Seeding allowedEmails collection...');
-      await AllowedEmail.insertMany([
-        { email: "student@gcek.ac.in", role: "Student", addedAt: new Date() },
-        { email: "alumni@gmail.com", role: "Alumni", addedAt: new Date() },
-        { email: "coord@gcek.ac.in", role: "Coordinator", addedAt: new Date() },
-        { email: "advisor@gcek.ac.in", role: "Advisor", addedAt: new Date() }
-      ]);
-      console.log('allowedEmails seeded successfully');
-    }
-
-    // Seed default users for all roles
-    const defaultUsers = [
-      {
-        email: 'student@gcek.ac.in',
-        password: 'studentPass123',
-        role: 'Student',
-      },
-      {
-        email: 'alumni@gmail.com',
-        password: 'alumniPass123',
-        role: 'Alumni',
-      },
-      {
-        email: 'coord@gcek.ac.in',
-        password: 'coordPass123',
-        role: 'Coordinator',
-      },
-      {
-        email: 'advisor@gcek.ac.in',
-        password: 'advisorPass123',
-        role: 'Advisor',
-      },
-    ];
-
-    for (const { email, password, role } of defaultUsers) {
+    //await User.deleteMany({});
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      console.log('Seeding users collection...');
+      const salt = await bcrypt.genSalt(10);
       try {
-        let user = await User.findOne({ email });
-        if (!user) {
-          console.log(`Creating default ${role} in Firebase and MongoDB...`);
-          const firebaseUser = await admin.auth().createUser({
-            email,
-            password,
-          });
-          user = new User({
-            firebaseUid: firebaseUser.uid,
-            email,
-            role,
-            isVerified: true,
-          });
-          await user.save();
-          console.log(`Default ${role} created:`, user);
-        } else {
-          console.log(`Default ${role} already exists in MongoDB:`, user);
-          await admin.auth().updateUser(user.firebaseUid, { password });
-          console.log(`${role} Firebase password synced`);
-        }
+        await User.insertMany([
+          {
+            name: 'Alice Smith',
+            email: 'alice.student@gcek.ac.in',
+            password: await bcrypt.hash('alicePass123', salt),
+            role: 'Student',
+            registered: true,
+            registrationNumber: 'STU003',
+            batch: 2022,
+            semestersCompleted: 4,
+            cgpa: 9.0,
+            numberOfBacklogs: 0,
+            branch: 'Mechanical'
+          },
+          {
+            name: 'Bob Johnson',
+            email: 'bob.alumni@gcek.ac.in',
+            password: null, // Alumni registers via OTP
+            role: 'Alumni',
+            registered: false
+          },
+          {
+            name: 'Carol Williams',
+            email: 'carol.advisor@gcek.ac.in',
+            password: await bcrypt.hash('carolPass123', salt), // Default password for Advisor
+            role: 'Advisor',
+            registered: true,
+            branch: 'Electrical'
+          },
+          {
+            name: 'David Brown',
+            email: 'david.coord@gcek.ac.in',
+            password: await bcrypt.hash('davidPass123', salt), // Default password for Coordinator
+            role: 'Coordinator',
+            registered: true
+          },
+          {
+            name: 'Eve Davis',
+            email: 'eve.student@gcek.ac.in',
+            password: null, // Student registers via OTP
+            role: 'Student',
+            registered: false,
+            registrationNumber: 'STU004',
+            batch: 2024,
+            branch: 'Civil'
+          }
+        ]);
+        console.log('Users seeded successfully');
       } catch (err) {
-        console.error(`Error seeding default ${role}:`, err);
+        console.error('Seeding error:', err.message);
       }
+    } else {
+      console.log('Users already seeded, skipping...');
     }
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
-app.use('/api/auth', require('./routes/auth'));
+app.use('/auth', require('./routes/auth'));
 
-app.listen(process.env.PORT || 5000, () => console.log(`Server running on port ${process.env.PORT || 5000}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

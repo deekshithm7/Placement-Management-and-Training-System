@@ -1,196 +1,115 @@
+// backend/routes/auth.js
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
-const AllowedEmail = require('../models/AllowedEmail');
+const passport = require('passport');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
-const admin = require('firebase-admin');
-const { authenticate } = require('../middleware/auth');
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 const transporter = nodemailer.createTransport({
   host: "smtp-relay.brevo.com",
       port: 587,
       secure: false,
-  auth: {
-    user: process.env.NODEMAILER_EMAIL,
-    pass: process.env.NODEMAILER_PASS,
-  },
+  auth: { user: process.env.NODEMAILER_EMAIL, pass: process.env.NODEMAILER_PASS },
 });
 
-// Check if email is allowed and not registered
 router.post('/check-email', async (req, res) => {
   const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ message: 'Email is required', allowed: false, exists: false });
-  }
   try {
-    console.log('Checking email against allowedEmails:', email);
-    const allowed = await AllowedEmail.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
-    if (!allowed) {
-      console.log('Email not found in allowedEmails:', email);
-      return res.status(403).json({ message: 'Email not allowed', allowed: false, exists: false });
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+    if (!user) {
+      console.log(`[CHECK-EMAIL] Email: ${email}, Result: Not found`);
+      return res.status(403).json({ message: 'Email not in allowed users list', exists: false });
     }
-    console.log('Email allowed:', { email, role: allowed.role });
-    const exists = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
-    res.json({ allowed: true, exists: !!exists, role: allowed.role });
+    if (!['Student', 'Alumni'].includes(user.role)) {
+      console.log(`[CHECK-EMAIL] Email: ${email}, Result: Registration not allowed for role ${user.role}`);
+      return res.status(403).json({ message: 'Registration only allowed for students and alumni', exists: true, role: user.role });
+    }
+    if (user.registered) {
+      console.log(`[CHECK-EMAIL] Email: ${email}, Result: Already registered`);
+      return res.status(400).json({ message: 'Email already registered', exists: true, registered: true });
+    }
+    console.log(`[CHECK-EMAIL] Email: ${email}, Result: Valid for OTP`);
+    res.json({ message: 'Email found, proceed with OTP', exists: true, registered: false });
   } catch (err) {
-    console.error('Check email error:', err);
-    res.status(500).json({ message: 'Server error during email check: ' + err.message });
+    console.error(`[CHECK-EMAIL ERROR] Email: ${email}, Error: ${err.message}`);
+    res.status(500).json({ message: 'Server error checking email' });
   }
 });
 
-// Send OTP for registration
 router.post('/send-registration-otp', async (req, res) => {
   const { email } = req.body;
-  console.log('Send OTP request:', { email });
-
   try {
-    const allowed = await AllowedEmail.findOne({ email });
-    if (!allowed) {
-      console.log('Email not allowed:', email);
-      return res.status(403).json({ message: 'Email not allowed' });
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+    if (!user || !['Student', 'Alumni'].includes(user.role)) {
+      console.log(`[SEND-OTP] Email: ${email}, Result: ${!user ? 'Not found' : 'Not a student or alumni'}`);
+      return res.status(400).json({ message: !user ? 'Email not found' : 'Registration only allowed for students and alumni' });
     }
-
+    if (user.registered) {
+      console.log(`[SEND-OTP] Email: ${email}, Result: Already registered`);
+      return res.status(400).json({ message: 'Email already registered' });
+    }
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpToken = jwt.sign({ email, role: allowed.role, otp }, process.env.JWT_SECRET, { expiresIn: '10m' });
-
+    const otpToken = jwt.sign({ email, role: user.role, otp }, process.env.JWT_SECRET, { expiresIn: '10m' });
     await transporter.sendMail({
       from: process.env.NODEMAILER_EMAIL,
       to: email,
       subject: 'Your Registration OTP',
       text: `Your OTP is ${otp}. It expires in 10 minutes.`,
     });
-    console.log('OTP email sent to:', email, 'OTP:', otp);
-
+    console.log(`[SEND-OTP] OTP sent to: ${email} :(${otp})`);
     res.json({ message: 'OTP sent', otpToken });
   } catch (err) {
-    console.error('Send OTP error:', err);
-    res.status(500).json({ message: 'Failed to send OTP: ' + err.message });
+    console.error(`[SEND-OTP ERROR] Email: ${email}, Error: ${err.message}`);
+    res.status(500).json({ message: 'Failed to send OTP' });
   }
 });
 
-// Verify OTP and set password
 router.post('/verify-and-set-password', async (req, res) => {
   const { email, otp, password, otpToken } = req.body;
-  console.log('Verify and set password request:', { email, otpToken });
-
   try {
     const decoded = jwt.verify(otpToken, process.env.JWT_SECRET);
-    console.log('Decoded token:', decoded);
-
-    if (decoded.otp !== otp || decoded.email !== email) {
-      console.log('OTP mismatch:', { decodedOtp: decoded.otp, providedOtp: otp });
-      return res.status(400).json({ message: 'Invalid OTP' });
+    if (decoded.otp !== otp || decoded.email !== email || !['Student', 'Alumni'].includes(decoded.role)) {
+      console.log(`[VERIFY-OTP] Invalid OTP, email mismatch, or role for: ${email}`);
+      return res.status(400).json({ message: 'Invalid OTP or role' });
     }
-
-    let user = await User.findOne({ email });
-    if (user) {
-      // User exists (e.g., from Google Sign-In), link password
-      console.log('Linking password to existing user:', email);
-      await admin.auth().updateUser(user.firebaseUid, { password });
-      user.isVerified = true;
-      await user.save();
-    } else {
-      // New user, create with email/password
-      console.log('Creating new Firebase user:', { email });
-      const firebaseUser = await admin.auth().createUser({ email, password });
-      user = new User({
-        firebaseUid: firebaseUser.uid,
-        email,
-        role: decoded.role,
-        isVerified: true,
-      });
-      await user.save();
-      console.log('New user registered:', user);
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+    if (!user || user.registered) {
+      console.log(`[VERIFY-OTP] Invalid registration attempt for: ${email}`);
+      return res.status(400).json({ message: 'Invalid registration attempt' });
     }
-
-    res.status(200).json({ message: 'Password set successfully' });
-  } catch (err) {
-    console.error('Verify and set password error:', err);
-    res.status(500).json({ message: 'Registration failed: ' + err.message });
-  }
-});
-
-// Google sign-in with role-specific restrictions
-router.post('/google-login', async (req, res) => {
-  const { firebaseUid, email, role } = req.body;
-  const token = req.headers.authorization?.split('Bearer ')[1];
-
-  if (!token) {
-    return res.status(400).json({ message: 'No token provided' });
-  }
-
-  try {
-    console.log('Google login request:', { firebaseUid, email, role });
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    console.log('Decoded token:', decodedToken);
-
-    if (decodedToken.uid !== firebaseUid) {
-      return res.status(401).json({ message: 'Token UID mismatch' });
-    }
-
-    if (role === 'Student' && !email.endsWith('@gcek.ac.in')) {
-      return res.status(400).json({ message: 'Email must end with @gcek.ac.in for students' });
-    }
-
-    let user = await User.findOne({ email });
-    if (user) {
-      if (user.role !== role) {
-        console.log(`Role mismatch: Existing role "${user.role}" does not match requested role "${role}"`);
-        return res.status(403).json({ message: 'Role mismatch: User registered with a different role' });
-      }
-      if (user.firebaseUid !== firebaseUid) {
-        console.log('Linking Google provider to existing user:', user.email);
-        await admin.auth().updateUser(user.firebaseUid, {
-          providerData: [
-            ...(await admin.auth().getUser(user.firebaseUid)).providerData,
-            { providerId: 'google.com', uid: firebaseUid },
-          ],
-        });
-        await user.save();
-        console.log('User updated with Google link:', user);
-      }
-    } else {
-      if (role === 'Coordinator' || role === 'Advisor') {
-        console.log(`No existing ${role} found for email:`, email);
-        return res.status(403).json({ message: 'Not allowed: Coordinator/Advisor must exist in database' });
-      }
-      const allowed = await AllowedEmail.findOne({ email });
-      if (!allowed) {
-        console.log('Email not allowed for new user:', email);
-        return res.status(403).json({ message: 'Unauthorized email: Not in allowed list' });
-      }
-      user = new User({
-        firebaseUid,
-        email,
-        role,
-        isVerified: true,
-      });
-      await user.save();
-      console.log('New user created:', user);
-    }
-
-    res.json({ email: user.email, role: user.role });
-  } catch (err) {
-    console.error('Google login error:', err);
-    res.status(500).json({ message: 'Google login failed: ' + err.message });
-  }
-});
-
-router.get('/me', authenticate, (req, res) => {
-  console.log('Serving /me for user:', req.user);
-  res.json({ email: req.user.email, role: req.user.role });
-});
-
-router.post('/update-profile', authenticate, async (req, res) => {
-  const { name, password } = req.body;
-  try {
-    const user = await User.findOne({ firebaseUid: req.user.firebaseUid });
-    user.name = name;
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    user.registered = true;
+    user.updatedAt = new Date();
     await user.save();
-    res.json({ message: 'Profile updated' });
+    console.log(`[REGISTER SUCCESS] User: ${email}, Role: ${user.role}`);
+    res.json({ message: 'Registration successful' });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to update profile' });
+    console.error(`[VERIFY-OTP ERROR] Email: ${email}, Error: ${err.message}`);
+    res.status(500).json({ message: 'Error completing registration' });
+  }
+});
+
+router.post('/login', passport.authenticate('local', { session: true }), (req, res) => {
+  console.log(`[LOGIN SUCCESS] User: ${req.user.email}, Role: ${req.user.role}`);
+  res.json({ message: 'Logged in successfully', user: { email: req.user.email, role: req.user.role } });
+});
+
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
+  console.log(`[GOOGLE LOGIN SUCCESS] User: ${req.user.email}, Role: ${req.user.role}`);
+  res.redirect(`http://localhost:5173/${req.user.role}`);
+});
+
+router.get('/me', (req, res) => {
+  if (req.isAuthenticated()) {
+    console.log(`[AUTH/ME] User: ${req.user.email}, Role: ${req.user.role}`);
+    res.json({ email: req.user.email, role: req.user.role });
+  } else {
+    console.log('[AUTH/ME] No authenticated user');
+    res.status(401).json({ message: 'Not authenticated' });
   }
 });
 
