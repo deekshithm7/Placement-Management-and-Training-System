@@ -11,6 +11,7 @@
   "author": "harith",
   "license": "MIT",
   "dependencies": {
+    "axios": "^1.8.1",
     "bcryptjs": "^2.4.3",
     "connect-mongo": "^5.1.0",
     "cors": "^2.8.5",

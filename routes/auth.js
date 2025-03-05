@@ -2,15 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const passport = require('passport');
-const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.NODEMAILER_EMAIL, pass: process.env.NODEMAILER_PASS },
-});
+const axios =require('axios');
 
 router.post('/check-email', async (req, res) => {
   const { email } = req.body;
@@ -35,19 +30,33 @@ router.post('/send-registration-otp', async (req, res) => {
     if (user.registered) return res.status(400).json({ message: 'Email already registered' });
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpToken = jwt.sign({ email, role: user.role, otp }, process.env.JWT_SECRET, { expiresIn: '10m' });
-    await transporter.sendMail({
-      from: process.env.NODEMAILER_EMAIL,
-      to: email,
-      subject: 'Your Registration OTP',
-      text: `Your OTP is ${otp}. It expires in 10 minutes.`,
-    });
-    console.log(`[SEND-OTP] OTP sent to: ${email}`);
+    try {
+      const response = await axios.post(
+          "https://api.brevo.com/v3/smtp/email",
+          {
+              sender: { name: "YourApp", email: process.env.BREVO_EMAIL },
+              to: [{ email: `${email}` }], // Replace with actual recipient
+              subject: "Your OTP Code",
+              htmlContent: `<p>Your OTP is: <strong>${otp}</strong></p><p>This code is valid for 5 minutes.</p>`
+          },
+          {
+              headers: { "api-key": process.env.BREVO_API_KEY, "Content-Type": "application/json" }
+          }
+      );
+      console.log("OTP Sent Successfully:", response.data);
+  } catch (error) {
+      console.error("Error sending OTP:", error.response ? error.response.data : error);
+  }
+
+    console.log(`[SEND-OTP] OTP sent to: ${email} : ${otp}`);
     res.json({ message: 'OTP sent', otpToken });
   } catch (err) {
     console.error(`[SEND-OTP ERROR] Email: ${email}, Error: ${err.message}`);
     res.status(500).json({ message: 'Failed to send OTP' });
   }
 });
+
+    
 
 router.post('/verify-and-set-password', async (req, res) => {
   const { email, otp, password, otpToken } = req.body;

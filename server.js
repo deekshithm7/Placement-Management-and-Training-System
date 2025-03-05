@@ -27,9 +27,9 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Passport config
-passport.use(new LocalStrategy(
+passport.use(new LocalStrategy(  
   { usernameField: 'email' },
-  async (email, password, done) => {
+  async (email, password, done) => { 
     try {
       const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
       if (!user) return done(null, false, { message: 'User not found' });
@@ -48,7 +48,7 @@ passport.use(new LocalStrategy(
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,  
   callbackURL: `http://localhost:${PORT}/auth/google/callback`,
 }, async (accessToken, refreshToken, profile, done) => {
   try {
@@ -100,10 +100,12 @@ mongoose
         { name: 'Bob Johnson', email: 'bob.alumni@gcek.ac.in', password: null, role: 'Alumni', registered: false },
         { name: 'Carol Williams', email: 'carol.advisor@gcek.ac.in', password: await bcrypt.hash('carolPass123', salt), role: 'Advisor', registered: true, branch: 'Electrical' },
         { name: 'David Brown', email: 'david.coord@gcek.ac.in', password: await bcrypt.hash('davidPass123', salt), role: 'Coordinator', registered: true },
-        { name: 'Eve Davis', email: 'eve.student@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Civil' }
+        { name: 'Eve Davis', email: 'eve.student@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Civil' },
+        { name: 'anto joji', email: '21b235@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Cse' }
       ]);
       console.log('Users seeded successfully');
     }
+
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
