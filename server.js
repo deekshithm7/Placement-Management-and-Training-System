@@ -107,6 +107,7 @@ mongoose
       ]);
       console.log('Users seeded successfully');
     }
+    
 
   })
   .catch((err) => console.error('MongoDB connection error:', err));

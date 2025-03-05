@@ -34,10 +34,21 @@ router.post('/send-registration-otp', async (req, res) => {
       const response = await axios.post(
           "https://api.brevo.com/v3/smtp/email",
           {
-              sender: { name: "YourApp", email: process.env.BREVO_EMAIL },
+              sender: { name: "pmts", email: process.env.BREVO_EMAIL },
               to: [{ email: `${email}` }], // Replace with actual recipient
               subject: "Your OTP Code",
-              htmlContent: `<p>Your OTP is: <strong>${otp}</strong></p><p>This code is valid for 5 minutes.</p>`
+              htmlContent: `<!DOCTYPE html>
+<html>
+<head><title>OTP Verification</title></head>
+<body>
+    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif;">
+        <h2>Verify Your Email</h2>
+        <p>Use the OTP below to verify your email address:</p>
+        <h2 style="color:#2D89FF;">${otp}</h2>
+        <p>This OTP is valid for 5 minutes.</p>
+    </div>
+</body>
+</html>`
           },
           {
               headers: { "api-key": process.env.BREVO_API_KEY, "Content-Type": "application/json" }
@@ -71,6 +82,36 @@ router.post('/verify-and-set-password', async (req, res) => {
     user.updatedAt = new Date();
     await user.save();
     console.log(`[REGISTER SUCCESS] User: ${email}, Role: ${user.role}`);
+    const loginUrl = "https://pmts/login";
+    try {
+      const response = await axios.post(
+          "https://api.brevo.com/v3/smtp/email",
+          {
+              sender: { name: "pmts", email: process.env.BREVO_EMAIL },
+              to: [{ email: `${email}` }], // Replace with actual recipient
+              subject: "Registration successful",
+              htmlContent: `<!DOCTYPE html>
+<html>
+<head><title>Registration Successful</title></head>
+<body>
+    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif;">
+        <h2 style="color:#28a745;">✔ Registration Successful!</h2>
+        <p>Thank you for signing up. Your account has been successfully created.</p>
+        <p>You can now log in and start using our services.</p>
+        <a href="${loginUrl}" style="background-color:#2D89FF; color:white; padding:10px 20px; border-radius:5px; text-decoration:none;">Login Now</a>
+        <p style="color:#777; font-size:12px; margin-top:20px;">© 2025 Your Company. All rights reserved.</p>
+    </div>
+</body>
+</html>`
+          },
+          {
+              headers: { "api-key": process.env.BREVO_API_KEY, "Content-Type": "application/json" }
+          }
+      );
+      console.log("Registration Successfull email sent:", response.data);
+  } catch (error) {
+      console.error("Error sending registration successfull email:", error.response ? error.response.data : error);
+  }
     res.json({ message: 'Registration successful' });
   } catch (err) {
     console.error(`[VERIFY-OTP ERROR] Email: ${email}, Error: ${err.message}`);
