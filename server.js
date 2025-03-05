@@ -10,6 +10,8 @@ const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const User = require('./models/User');
+const studentRoutes = require('./routes/addStudent');
+
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -112,5 +114,6 @@ mongoose
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/api/students', require('./routes/addStudent')); // Add student routes
+app.use('/api/students', studentRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

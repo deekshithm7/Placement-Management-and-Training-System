@@ -4,10 +4,14 @@ const router = express.Router();
 const { 
   addStudentsSingle, 
   addStudentsBulk, 
-  getStudentUploadTemplate 
+  getStudentUploadTemplate ,
+  getStudentById, 
+  updateStudent, 
+  listStudents 
 } = require('../controllers/addStudentController');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
+
 
 const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
@@ -22,6 +26,27 @@ const upload = multer({
     }
   }
 });
+
+// Get student by ID (for editing)
+router.get('/students/:id', 
+  isAuthenticated, 
+  checkRole(['Advisor']), 
+  getStudentById
+);
+
+// Update student
+router.put('/edit/:id', 
+  isAuthenticated, 
+  checkRole(['Advisor']), 
+  updateStudent
+);
+
+// List students for advisor
+router.get('/list', 
+  isAuthenticated, 
+  checkRole(['Advisor']), 
+  listStudents
+);
 
 router.post('/add', isAuthenticated, checkRole(['Advisor']), addStudentsSingle);
 router.post('/bulk-add', isAuthenticated, checkRole(['Advisor']), upload.single('studentFile'), addStudentsBulk);
