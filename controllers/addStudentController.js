@@ -139,3 +139,95 @@ exports.getStudentUploadTemplate = (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(excelBuffer);
 };
+
+exports.getStudentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find student and ensure they're from advisor's branch
+    const student = await User.findOne({ 
+      _id: id, 
+      role: 'Student', 
+      branch: req.user.branch 
+    }).select('-password');
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found or unauthorized' });
+    }
+
+    res.json(student);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Update student
+exports.updateStudent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Find student and ensure they're from advisor's branch
+    const student = await User.findOne({ 
+      _id: id, 
+      role: 'Student', 
+      branch: req.user.branch 
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found or unauthorized' });
+    }
+
+    // Validate incoming data
+    try {
+      await validateStudentData(updateData);
+    } catch (validationError) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: validationError.message 
+      });
+    }
+
+    // Update student
+    const updatedStudent = await User.findByIdAndUpdate(
+      id, 
+      { 
+        ...updateData, 
+        updatedAt: new Date() 
+      }, 
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    ).select('-password');
+
+    res.json({
+      message: 'Student updated successfully',
+      student: updatedStudent
+    });
+  } catch (error) {
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        message: 'Duplicate key error',
+        duplicateField: Object.keys(error.keyPattern)[0]
+      });
+    }
+    
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// List students for advisor
+exports.listStudents = async (req, res) => {
+  try {
+    const students = await User.find({ 
+      role: 'Student', 
+      branch: req.user.branch 
+    }).select('name registrationNumber branch batch email phoneNumber');
+
+    res.json(students);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
