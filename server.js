@@ -11,7 +11,8 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const User = require('./models/User');
 const studentRoutes = require('./routes/addStudent');
-
+const resourceRoutes = require('./routes/resourceRoutes');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -27,6 +28,7 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Passport config
 passport.use(new LocalStrategy(  
@@ -90,7 +92,7 @@ passport.deserializeUser(async (id, done) => {
 
 // Seed data
 mongoose
-  .connect(process.env.MONGO_URI || 'mongodb://localhost:27017/ptest')
+  .connect(process.env.MONGO_URI || 'mongodb+srv://DEEKSHITH:deeku7208@cluster1.gbq6d.mongodb.net/?retryWrites=true&w=majority&appName=Cluster1')
   .then(async () => {
     console.log('MongoDB connected');
     const userCount = await User.countDocuments();
@@ -116,5 +118,6 @@ mongoose
 app.use('/auth', require('./routes/auth'));
 app.use('/api/students', require('./routes/addStudent')); // Add student routes
 app.use('/api/students', studentRoutes);
+app.use('/api/resources', resourceRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
