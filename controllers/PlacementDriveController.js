@@ -184,12 +184,22 @@ exports.createPlacementDrive = async (req, res) => {
 
 exports.getAllPlacementDrives = async (req, res) => {
   try {
-    console.log('DEBUG: Fetching all placement drives');
-    const placementDrives = await PlacementDrive.find()
-      .sort({ createdAt: -1 }) // Sort by createdAt descending (latest first)
+    const { year } = req.query; // Get year from query parameter
+    console.log('DEBUG: Fetching all placement drives, year filter:', year);
+
+    let query = {};
+    if (year) {
+      const startOfYear = new Date(`${year}-01-01T00:00:00Z`);
+      const endOfYear = new Date(`${year}-12-31T23:59:59Z`);
+      query.date = { $gte: startOfYear, $lte: endOfYear };
+    }
+
+    const placementDrives = await PlacementDrive.find(query)
+      .sort({ createdAt: -1 }) // Latest first
       .populate('applications.student', 'name email registrationNumber branch cgpa numberOfBacklogs semestersCompleted')
       .populate('phases.shortlistedStudents', 'name email registrationNumber')
       .populate('createdBy', 'name email');
+
     console.log('DEBUG: Placement drives fetched:', placementDrives.length);
     res.status(200).json(placementDrives);
   } catch (error) {
