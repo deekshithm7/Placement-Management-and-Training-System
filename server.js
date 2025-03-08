@@ -13,7 +13,9 @@ const User = require('./models/User');
 const studentRoutes = require('./routes/addStudent');
 const aptitudeTestRoutes = require('./routes/aptitudeTests');
 
-
+const resourceRoutes = require('./routes/resourceRoutes');
+const path = require('path');
+const jobRoutes = require( './routes/jobRoutes.js');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -29,6 +31,7 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Passport config
 passport.use(new LocalStrategy(  
@@ -91,8 +94,9 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Seed data
+// Seed data
 mongoose
-  .connect(process.env.MONGO_URI || 'mongodb://localhost:27017/ptest')
+  .connect(process.env.MONGO_URI || 'mongodb+srv://DEEKSHITH:deeku7208@cluster1.gbq6d.mongodb.net/?retryWrites=true&w=majority&appName=Cluster1')
   .then(async () => {
     console.log('MongoDB connected');
     const userCount = await User.countDocuments();
@@ -101,11 +105,11 @@ mongoose
       const salt = await bcrypt.genSalt(10);
       await User.insertMany([
         { name: 'Alice Smith', email: 'alice.student@gcek.ac.in', password: await bcrypt.hash('alicePass123', salt), role: 'Student', registered: true, registrationNumber: 'STU003', batch: 2022, semestersCompleted: 4, cgpa: 9.0, numberOfBacklogs: 0, branch: 'Mechanical' },
-        { name: 'Bob Johnson', email: 'bob.alumni@gcek.ac.in', password: null, role: 'Alumni', registered: false },
+        { name: 'Bob Johnson', email: 'bob.alumni@gcek.ac.in', password: await bcrypt.hash('bobPass123', salt), role: 'Alumni', registered: true },
         { name: 'Carol Williams', email: 'carol.advisor@gcek.ac.in', password: await bcrypt.hash('carolPass123', salt), role: 'Advisor', registered: true, branch: 'Electrical' },
         { name: 'David Brown', email: 'david.coord@gcek.ac.in', password: await bcrypt.hash('davidPass123', salt), role: 'Coordinator', registered: true },
         { name: 'Eve Davis', email: 'eve.student@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Civil' },
-        { name: 'anto joji', email: '21b235@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Cse' }
+        { name: 'anto joji', email: '21b235@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Cse' },
       ]);
       console.log('Users seeded successfully');
     }
@@ -113,9 +117,13 @@ mongoose
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
+  
+
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/api/students', studentRoutes);
 app.use('/api/aptitude-tests', aptitudeTestRoutes);
+app.use('/api/resources', resourceRoutes);
+app.use('/api/jobs', jobRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

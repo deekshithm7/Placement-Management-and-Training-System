@@ -8,7 +8,7 @@ const checkRole = (roles) => {
     });
 
     if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: 'Unauthorized. Please log in.' });
+      return res.status(401).json({ message: 'Unauthorized.(role) Please log in.' });
     }
 
     if (!req.user || !roles.includes(req.user.role)) {
