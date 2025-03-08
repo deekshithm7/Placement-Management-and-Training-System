@@ -87,58 +87,113 @@ const sendApplicationEmail = async (student, placementDrive) => {
   }
 };
 
+const sendDriveCreationEmail = async (students, placementDrive) => {
+  console.log('DEBUG: Sending drive creation emails to:', students.map(s => s.email));
+  try {
+    const emailPromises = students.map(student => 
+      axios.post(
+        "https://api.brevo.com/v3/smtp/email",
+        {
+          sender: { name: "PMTS", email: process.env.BREVO_EMAIL },
+          to: [{ email: student.email }],
+          subject: `New Placement Drive: ${placementDrive.companyName} (${placementDrive.role})`,
+          htmlContent: `<!DOCTYPE html>
+<html>
+<head><title>New Placement Drive</title></head>
+<body>
+    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif;">
+        <h2>New Placement Opportunity!</h2>
+        <p>Dear ${student.name},</p>
+        <p>A new placement drive has been created that you may be eligible for:</p>
+        <h3>${placementDrive.companyName} - ${placementDrive.role}</h3>
+        <p><strong>Date:</strong> ${new Date(placementDrive.date).toLocaleDateString()}</p>
+        <p><strong>Eligible Branches:</strong> ${placementDrive.eligibleBranches.join(', ')}</p>
+        <p><strong>Minimum CGPA:</strong> ${placementDrive.minCGPA}</p>
+        <p><strong>Maximum Backlogs:</strong> ${placementDrive.maxBacklogs}</p>
+        <p><strong>Minimum Semesters Completed:</strong> ${placementDrive.minSemestersCompleted}</p>
+        <p><strong>Description:</strong> ${placementDrive.description || 'No description provided'}</p>
+        <p>Log in to your dashboard to apply!</p>
+    </div>
+</body>
+</html>`
+        },
+        {
+          headers: { 
+            "api-key": process.env.BREVO_API_KEY, 
+            "Content-Type": "application/json" 
+          }
+        }
+      )
+    );
+    await Promise.all(emailPromises);
+    console.log('DEBUG: Drive creation emails sent successfully');
+  } catch (error) {
+    console.error('ERROR sending drive creation emails:', error.response?.data || error.message);
+    throw new Error('Failed to send drive creation notification emails');
+  }
+};
 
 exports.createPlacementDrive = async (req, res) => {
-  const {
-    companyName, role, description, minCGPA, maxBacklogs,
-    eligibleBranches, minSemestersCompleted, date
-  } = req.body;
+  const { companyName, role, description, minCGPA, maxBacklogs, eligibleBranches, minSemestersCompleted, date } = req.body;
 
   try {
-    if (!companyName || !role || !date || !eligibleBranches || !Array.isArray(eligibleBranches)) {
-      return res.status(400).json({ message: 'Missing or invalid required fields' });
-    }
-
+    console.log('DEBUG: Creating placement drive:', { companyName, role });
     const placementDrive = new PlacementDrive({
-      companyName, role, description, minCGPA: minCGPA || 0,
-      maxBacklogs: maxBacklogs || 0, eligibleBranches,
+      companyName,
+      role,
+      description,
+      minCGPA: minCGPA || 0,
+      maxBacklogs: maxBacklogs || 0,
+      eligibleBranches,
       minSemestersCompleted: minSemestersCompleted || 0,
-      date, createdBy: req.user._id, applications: []
+      date,
+      createdBy: req.user._id
     });
-
     await placementDrive.save();
+    console.log('DEBUG: Placement drive created, ID:', placementDrive._id);
 
+    // Find eligible students with case-insensitive branch check
+    console.log('DEBUG: Finding eligible students');
     const eligibleStudents = await User.find({
       role: 'Student',
-      branch: { $in: eligibleBranches },
+      branch: { $in: eligibleBranches.map(branch => new RegExp(`^${branch}$`, 'i')) }, // Case-insensitive match
       cgpa: { $gte: minCGPA || 0 },
       numberOfBacklogs: { $lte: maxBacklogs || 0 },
       semestersCompleted: { $gte: minSemestersCompleted || 0 }
     });
+    console.log('DEBUG: Eligible students found:', eligibleStudents.length);
 
-    await User.updateMany(
-      { _id: { $in: eligibleStudents.map(student => student._id) } },
-      { $addToSet: { eligibleDrives: placementDrive._id } }
-    );
+    // Update students' eligibleDrives
+    if (eligibleStudents.length > 0) {
+      await User.updateMany(
+        { _id: { $in: eligibleStudents.map(s => s._id) } },
+        { $addToSet: { eligibleDrives: placementDrive._id } }
+      );
+      console.log('DEBUG: Updated eligibleDrives for students');
 
-    res.status(201).json({
-      message: 'Placement drive created successfully',
-      placementDrive,
-      eligibleStudentsCount: eligibleStudents.length
-    });
+      // Send emails to eligible students
+      await sendDriveCreationEmail(eligibleStudents, placementDrive);
+    }
+
+    res.status(201).json({ message: 'Placement drive created successfully', placementDrive });
   } catch (error) {
+    console.error('ERROR in createPlacementDrive:', error.message, error.stack);
     res.status(500).json({ message: 'Error creating placement drive', error: error.message });
   }
 };
 
 exports.getAllPlacementDrives = async (req, res) => {
   try {
+    console.log('DEBUG: Fetching all placement drives');
     const placementDrives = await PlacementDrive.find()
-      .populate('createdBy', 'name email')
-      .populate('applications.student', 'name email registrationNumber')
-      .populate('phases.shortlistedStudents', 'name email registrationNumber');
+      .sort({ createdAt: -1 }) // Sort by createdAt descending (latest first)
+      .populate('applications.student', 'name email registrationNumber branch cgpa numberOfBacklogs semestersCompleted')
+      .populate('phases.shortlistedStudents', 'name email registrationNumber')
+      .populate('createdBy', 'name email');
+    console.log('DEBUG: Placement drives fetched:', placementDrives.length);
     res.status(200).json(placementDrives);
   } catch (error) {
+    console.error('ERROR in getAllPlacementDrives:', error.message, error.stack);
     res.status(500).json({ message: 'Error fetching placement drives', error: error.message });
   }
 };
@@ -173,7 +228,7 @@ exports.applyToPlacementDrive = async (req, res) => {
 
     const student = req.user;
     console.log('DEBUG: Student applying:', student.email);
-    if (!placementDrive.eligibleBranches.includes(student.branch) ||
+    if (!placementDrive.eligibleBranches.some(b => new RegExp(`^${b}$`, 'i').test(student.branch)) ||
         (student.cgpa || 0) < placementDrive.minCGPA ||
         (student.numberOfBacklogs || 0) > placementDrive.maxBacklogs ||
         (student.semestersCompleted || 0) < placementDrive.minSemestersCompleted) {
