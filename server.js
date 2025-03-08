@@ -11,6 +11,8 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const User = require('./models/User');
 const studentRoutes = require('./routes/addStudent');
+const aptitudeTestRoutes = require('./routes/aptitudeTests');
+
 
 
 const app = express();
@@ -114,5 +116,6 @@ mongoose
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/api/students', studentRoutes);
+app.use('/api/aptitude-tests', aptitudeTestRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
