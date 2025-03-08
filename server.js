@@ -11,6 +11,8 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const User = require('./models/User');
 const studentRoutes = require('./routes/addStudent');
+const aptitudeTestRoutes = require('./routes/aptitudeTests');
+
 const resourceRoutes = require('./routes/resourceRoutes');
 const path = require('path');
 const jobRoutes = require( './routes/jobRoutes.js');
@@ -117,14 +119,14 @@ mongoose
     await User.insertMany([
       { name: 'rick morty', email: 'rickmorty@gcek.ac.in', password: await bcrypt.hash('123456', salt),role: 'Advisor', registered: true ,branch:'Cse'},
     ]);
-  })
-  .catch((err) => console.error('MongoDB connection error:', err));
+  }).catch((err) => console.error('MongoDB connection error:', err));
 
   
 
 // Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/api/students', studentRoutes);
+app.use('/api/aptitude-tests', aptitudeTestRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/placement-drives', require('./routes/placementDrives'));
