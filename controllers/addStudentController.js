@@ -493,6 +493,7 @@ exports.getCurrentStudent = async (req, res) => {
     const student = await User.findById(req.user._id)
       .populate({
         path: 'eligibleDrives',
+        options: { sort: { createdAt: -1 } }, // Sort drives by createdAt in descending order
         populate: {
           path: 'applications.student', // Populate the student field inside applications
           select: 'name email' // Select only necessary fields
@@ -516,7 +517,8 @@ exports.getCurrentStudent = async (req, res) => {
         jobTitle: drive.jobTitle,
         location: drive.location,
         salary: drive.salary,
-        status: application ? application.status : 'Not Applied'
+        status: application ? application.status : 'Not Applied',
+        createdAt: drive.createdAt // Include createdAt for frontend sorting (if needed)
       };
     });
 
