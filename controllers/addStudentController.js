@@ -491,18 +491,37 @@ exports.getCurrentStudent = async (req, res) => {
   try {
     console.log('DEBUG: getCurrentStudent - req.user._id:', req.user._id);
     const student = await User.findById(req.user._id)
-      .populate('eligibleDrives')
+      .populate({
+        path: 'eligibleDrives',
+        populate: {
+          path: 'applications.student', // Populate the student field inside applications
+          select: 'name email' // Select only necessary fields
+        }
+      })
       .select('-password');
-    
+
     console.log('DEBUG: Fetched student:', student);
-    
+
     if (!student || student.role !== 'Student') {
       console.log('DEBUG: Student not found or not a student');
       return res.status(404).json({ message: 'Student not found' });
     }
-    
-    console.log('DEBUG: Returning student with eligibleDrives:', student.eligibleDrives);
-    res.status(200).json(student);
+
+    // Filter and map the eligibleDrives to include only the necessary details
+    const eligibleDrives = student.eligibleDrives.map(drive => {
+      const application = drive.applications.find(app => app.student._id.toString() === req.user._id.toString());
+      return {
+        _id: drive._id,
+        companyName: drive.companyName,
+        jobTitle: drive.jobTitle,
+        location: drive.location,
+        salary: drive.salary,
+        status: application ? application.status : 'Not Applied'
+      };
+    });
+
+    console.log('DEBUG: Returning eligibleDrives:', JSON.stringify(eligibleDrives, null, 2));
+    res.status(200).json({ eligibleDrives });
   } catch (error) {
     console.error('DEBUG: Error in getCurrentStudent:', error.message);
     res.status(500).json({ message: 'Error fetching student details', error: error.message });
