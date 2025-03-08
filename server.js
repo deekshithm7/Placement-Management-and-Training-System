@@ -115,7 +115,7 @@ mongoose
     // Corrected seed for joneeta Johnson
     const salt = await bcrypt.genSalt(10); // Move this outside
     await User.insertMany([
-      { name: 'hala', email: 'hala@gcek.ac.in', password: await bcrypt.hash('joneetaPass123', salt),  registrationNumber: 'STU00sds' ,role: 'Student', registered: true ,branch:'Electrical',batch:2022,semestersCompleted:4,cgpa:9.0,numberOfBacklogs:0},
+      { name: 'rick morty', email: 'rickmorty@gcek.ac.in', password: await bcrypt.hash('123456', salt),role: 'Advisor', registered: true ,branch:'Cse'},
     ]);
   })
   .catch((err) => console.error('MongoDB connection error:', err));
