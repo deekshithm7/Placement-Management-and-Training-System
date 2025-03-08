@@ -115,7 +115,7 @@ mongoose
     // Corrected seed for joneeta Johnson
     const salt = await bcrypt.genSalt(10); // Move this outside
     await User.insertMany([
-      { name: 'joneeta Johnson', email: 'joneeta.alumni@gcek.ac.in', password: await bcrypt.hash('joneetaPass123', salt), role: 'Alumni', registered: true },
+      { name: 'hala', email: 'hala@gcek.ac.in', password: await bcrypt.hash('joneetaPass123', salt),  registrationNumber: 'STU00sds' ,role: 'Student', registered: true ,branch:'Electrical',batch:2022,semestersCompleted:4,cgpa:9.0,numberOfBacklogs:0},
     ]);
   })
   .catch((err) => console.error('MongoDB connection error:', err));
@@ -127,5 +127,6 @@ app.use('/auth', require('./routes/auth'));
 app.use('/api/students', studentRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/placement-drives', require('./routes/placementDrives'));
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -1,22 +1,21 @@
-// backend/routes/addStudent.js
 const express = require('express');
 const router = express.Router();
-const {
-  addStudentsSingle,
-  addStudentsBulk,
+const { 
+  addStudentsSingle, 
+  addStudentsBulk, 
   getStudentUploadTemplate,
   getStudentById,
-  updateStudent,
   listStudents,
+  updateStudent,
   editStudentsBulk,
-  editStudentUploadTemplate
+  editStudentUploadTemplate,
+  getCurrentStudent
 } = require('../controllers/addStudentController');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
 
-// Configure multer storage
 const upload = multer({
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (
       file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
@@ -29,83 +28,14 @@ const upload = multer({
   }
 });
 
-// Multer error handling middleware
-const handleMulterError = (err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    // A Multer error occurred when uploading
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ 
-        message: 'File too large. Maximum size is 5MB.' 
-      });
-    }
-    return res.status(400).json({
-      message: `File upload error: ${err.message}`
-    });
-  } else if (err) {
-    // An unknown error occurred
-    return res.status(400).json({
-      message: err.message || 'File upload error'
-    });
-  }
-  next();
-};
-
-// Single student operations
-router.post('/add', 
-  isAuthenticated, 
-  checkRole(['Advisor']), 
-  addStudentsSingle
-);
-
-// Get student by ID (for editing)
-router.get('/students/:id',
-  isAuthenticated,
-  checkRole(['Advisor']),
-  getStudentById
-);
-
-// Update single student
-router.put('/edit/:id',
-  isAuthenticated,
-  checkRole(['Advisor']),
-  updateStudent
-);
-
-// List students for advisor
-router.get('/list',
-  isAuthenticated,
-  checkRole(['Advisor']),
-  listStudents
-);
-
-// Bulk operations
-router.post('/bulk-add', 
-  isAuthenticated, 
-  checkRole(['Advisor']), 
-  upload.single('studentFile'), 
-  handleMulterError,
-  addStudentsBulk
-);
-
-router.post('/bulk-edit', 
-  isAuthenticated, 
-  checkRole(['Advisor']), 
-  upload.single('studentFile'), 
-  handleMulterError,
-  editStudentsBulk
-);
-
-// Templates
-router.get('/upload-template', 
-  isAuthenticated, 
-  checkRole(['Advisor']), 
-  getStudentUploadTemplate
-);
-
-router.get('/edit-template', 
-  isAuthenticated, 
-  checkRole(['Advisor']), 
-  editStudentUploadTemplate
-);
+router.post('/add', isAuthenticated, checkRole(['Advisor']), addStudentsSingle);
+router.post('/bulk-add', isAuthenticated, checkRole(['Advisor']), upload.single('studentFile'), addStudentsBulk);
+router.get('/upload-template', isAuthenticated, checkRole(['Advisor']), getStudentUploadTemplate);
+router.get('/students/:id', isAuthenticated, checkRole(['Advisor']), getStudentById);
+router.get('/list', isAuthenticated, checkRole(['Advisor']), listStudents);
+router.put('/edit/:id', isAuthenticated, checkRole(['Advisor']), updateStudent);
+router.post('/bulk-edit', isAuthenticated, checkRole(['Advisor']), upload.single('studentFile'), editStudentsBulk);
+router.get('/edit-template', isAuthenticated, checkRole(['Advisor']), editStudentUploadTemplate);
+router.get('/placements/me', isAuthenticated, checkRole(['Student']), getCurrentStudent);
 
 module.exports = router;

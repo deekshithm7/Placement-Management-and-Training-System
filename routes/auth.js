@@ -183,6 +183,8 @@ router.get('/status', async (req, res) => {
   }
 });
 
+
+
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
   console.log(`[GOOGLE LOGIN SUCCESS] User: ${req.user.email}, Role: ${req.user.role}`);
