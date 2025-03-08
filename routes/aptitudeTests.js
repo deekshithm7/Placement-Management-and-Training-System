@@ -131,44 +131,39 @@ router.get('/available', isAuthenticated, checkRole(['Student']), async (req, re
     }
   });
   
-  // Get all results for a specific student (for student analytics)
-  router.get('/result/:studentId', isAuthenticated, async (req, res) => {
+ 
+// Get all results for the current user (for student analytics)
+  router.get('/result/current', isAuthenticated, async (req, res) => {
     try {
-      if (
-        req.user.role !== 'Coordinator' && 
-        req.user._id.toString() !== req.params.studentId
-      ) {
-        return res.status(403).json({ message: 'Unauthorized access' });
-      }
-      const results = await QuizResult.find({ student: req.params.studentId })
-        .populate({
-          path: 'test',
-          select: 'title description duration questions createdAt'
+      const results = await QuizResult.find({ student: req.user._id })
+        .populate({ 
+          path: 'test', 
+          select: 'title description duration questions createdAt' 
         })
         .sort({ submittedAt: -1 });
-  
+      
       const totalAttempts = results.length;
       const highestScore = results.length > 0 
-        ? Math.max(...results.map(r => (r.score / r.totalMarks) * 100))
+        ? Math.max(...results.map(r => (r.score / r.totalMarks) * 100)) 
         : 0;
       const averageScore = results.length > 0 
-        ? (results.reduce((sum, r) => sum + (r.score / r.totalMarks) * 100, 0) / results.length)
+        ? (results.reduce((sum, r) => sum + (r.score / r.totalMarks) * 100, 0) / results.length) 
         : 0;
-  
-      res.json({
-        results,
-        analytics: {
-          totalAttempts,
-          highestScore: parseFloat(highestScore.toFixed(2)),
-          averageScore: parseFloat(averageScore.toFixed(2))
-        }
+      
+      res.json({ 
+        results, 
+        analytics: { 
+          totalAttempts, 
+          highestScore: parseFloat(highestScore.toFixed(2)), 
+          averageScore: parseFloat(averageScore.toFixed(2)) 
+        } 
       });
     } catch (error) {
       console.error('Error fetching student results:', error);
       res.status(500).json({ message: 'Server error' });
     }
   });
-  
+
   // Get specific quiz result (for viewing individual result)
   router.get('/result/:id', isAuthenticated, async (req, res) => {
     try {
