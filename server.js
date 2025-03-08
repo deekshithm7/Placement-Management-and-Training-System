@@ -113,7 +113,6 @@ mongoose
 
 // Routes
 app.use('/auth', require('./routes/auth'));
-app.use('/api/students', require('./routes/addStudent')); // Add student routes
 app.use('/api/students', studentRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
