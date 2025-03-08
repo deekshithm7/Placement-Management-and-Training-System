@@ -119,9 +119,27 @@ router.post('/verify-and-set-password', async (req, res) => {
   }
 });
 
-router.post('/login', passport.authenticate('local', { session: true }), (req, res) => {
-  console.log(`[LOGIN SUCCESS] User: ${req.user.email}, Role: ${req.user.role}`);
-  res.json({ message: 'Logged in successfully', user: { email: req.user.email, role: req.user.role } });
+router.post('/login', passport.authenticate('local', { session: true }), async (req, res) => {
+  try {
+    // Fetch the user from the database to ensure we have the latest data
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    console.log(`[LOGIN SUCCESS] User: ${user.email}, Role: ${user.role}`);
+    res.json({
+      message: 'Logged in successfully',
+      user: {
+        email: user.email,
+        role: user.role,
+        name: user.name || user.email, // Use name if available, fallback to email
+        batch: user.batch || null // Include batch, fallback to null if not present
+      }
+    });
+  } catch (err) {
+    console.error(`[LOGIN ERROR] Email: ${req.user.email}, Error: ${err.message}`);
+    res.status(500).json({ message: 'Server error during login' });
+  }
 });
 
 router.get('/logout', (req, res) => {
@@ -138,10 +156,27 @@ router.get('/logout', (req, res) => {
   });
 });
 
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   if (req.isAuthenticated()) {
-    console.log(`[STATUS] Authenticated user: ${req.user.email}`);
-    res.json({ isAuthenticated: true, user: { email: req.user.email, role: req.user.role } });
+    try {
+      const user = await User.findOne({ email: req.user.email });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      console.log(`[STATUS] Authenticated user: ${user.email}`);
+      res.json({
+        isAuthenticated: true,
+        user: {
+          email: user.email,
+          role: user.role,
+          name: user.name || user.email, // Use name if available, fallback to email
+          batch: user.batch || null // Include batch
+        }
+      });
+    } catch (err) {
+      console.error(`[STATUS ERROR] Email: ${req.user.email}, Error: ${err.message}`);
+      res.status(500).json({ message: 'Server error checking status' });
+    }
   } else {
     console.log('[STATUS] No authenticated user');
     res.json({ isAuthenticated: false, user: null });
