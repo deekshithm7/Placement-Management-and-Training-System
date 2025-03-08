@@ -517,6 +517,7 @@ exports.getCurrentStudent = async (req, res) => {
         jobTitle: drive.jobTitle,
         location: drive.location,
         salary: drive.salary,
+        date: drive.date,
         status: application ? application.status : 'Not Applied',
         createdAt: drive.createdAt // Include createdAt for frontend sorting (if needed)
       };
