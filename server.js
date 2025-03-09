@@ -130,6 +130,7 @@ app.use('/api/students', studentRoutes);
 app.use('/api/aptitude-tests', aptitudeTestRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/placement-drives', require('./routes/placementDrives'));
 app.use('/api/advisors', advisorRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
