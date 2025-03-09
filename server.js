@@ -12,11 +12,14 @@ const MongoStore = require('connect-mongo');
 const User = require('./models/User');
 const studentRoutes = require('./routes/addStudent');
 const aptitudeTestRoutes = require('./routes/aptitudeTests');
-
+const adminRoutes = require('./routes/admin');
+const authRoutes = require('./routes/auth');
 const resourceRoutes = require('./routes/resourceRoutes');
 const path = require('path');
+require('./models/RegistrationRequest');
 const jobRoutes = require( './routes/jobRoutes.js');
-const eventRoutes = require('./routes/eventRoutes');
+const eventRoutes = require('./routes/eventRoutes');const advisorRoutes = require('./routes/advisorRoutes');
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -114,20 +117,20 @@ mongoose
       console.log('Users seeded successfully');
     }
 
-    // Corrected seed for joneeta Johnson
-   const salt = await bcrypt.genSalt(10); // Move this outside
-    await User.insertMany([
-        { name: 'alumni', email: 'alumni@gcek.ac.in', password: await bcrypt.hash('123456', salt), role: 'Alumni', registered: true },
-    ]);
-  }).catch((err) => console.error('MongoDB connection error:', err));
 
+  })
+  .catch((err) => console.error('MongoDB connection error:', err));
+
+  
 
 // Routes
 app.use('/auth', require('./routes/auth'));
+app.use('/api/admin', require('./routes/admin'));
 app.use('/api/students', studentRoutes);
 app.use('/api/aptitude-tests', aptitudeTestRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/placement-drives', require('./routes/placementDrives'));
-app.use('/api/events', eventRoutes);
+app.use('/api/advisors', advisorRoutes);
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
