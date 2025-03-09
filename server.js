@@ -16,7 +16,7 @@ const aptitudeTestRoutes = require('./routes/aptitudeTests');
 const resourceRoutes = require('./routes/resourceRoutes');
 const path = require('path');
 const jobRoutes = require( './routes/jobRoutes.js');
-
+const eventRoutes = require('./routes/eventRoutes');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -115,13 +115,12 @@ mongoose
     }
 
     // Corrected seed for joneeta Johnson
-    const salt = await bcrypt.genSalt(10); // Move this outside
+   const salt = await bcrypt.genSalt(10); // Move this outside
     await User.insertMany([
-      { name: 'rick morty', email: 'rickmorty@gcek.ac.in', password: await bcrypt.hash('123456', salt),role: 'Advisor', registered: true ,branch:'Cse'},
+        { name: 'alumni', email: 'alumni@gcek.ac.in', password: await bcrypt.hash('123456', salt), role: 'Alumni', registered: true },
     ]);
   }).catch((err) => console.error('MongoDB connection error:', err));
 
-  
 
 // Routes
 app.use('/auth', require('./routes/auth'));
@@ -130,5 +129,5 @@ app.use('/api/aptitude-tests', aptitudeTestRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/placement-drives', require('./routes/placementDrives'));
-
+app.use('/api/events', eventRoutes);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
