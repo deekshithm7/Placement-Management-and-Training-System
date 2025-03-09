@@ -35,6 +35,7 @@ async function sendEmail(recipient, subject, content) {
 // Add a new advisor (Coordinator only)
 router.post('/add', isAuthenticated, checkRole(['Coordinator']), async (req, res) => {
   try {
+    console.log('[ADD-ADVISOR] Request received:', req.body);
     const { name, email, branch, phoneNumber, password } = req.body;
     
     // Validate required fields
