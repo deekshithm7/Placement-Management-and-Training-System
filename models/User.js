@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   semestersCompleted: { type: Number, default: 0, required: function() { return this.role === 'Student'; } },
   cgpa: { type: Number, default: null },
   numberOfBacklogs: { type: Number, default: 0, required: function() { return this.role === 'Student'; } },
-  branch: { type: String, required: function() { return this.role === 'Student' || this.role === 'Advisor'; } },
+  branch: { type: String },
   phoneNumber: { type: String },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

@@ -12,9 +12,11 @@ const MongoStore = require('connect-mongo');
 const User = require('./models/User');
 const studentRoutes = require('./routes/addStudent');
 const aptitudeTestRoutes = require('./routes/aptitudeTests');
-
+const adminRoutes = require('./routes/admin');
+const authRoutes = require('./routes/auth');
 const resourceRoutes = require('./routes/resourceRoutes');
 const path = require('path');
+require('./models/RegistrationRequest');
 const jobRoutes = require( './routes/jobRoutes.js');
 
 const app = express();
@@ -114,6 +116,7 @@ mongoose
       console.log('Users seeded successfully');
     }
 
+
   })
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -121,6 +124,7 @@ mongoose
 
 // Routes
 app.use('/auth', require('./routes/auth'));
+app.use('/api/admin', require('./routes/admin'));
 app.use('/api/students', studentRoutes);
 app.use('/api/aptitude-tests', aptitudeTestRoutes);
 app.use('/api/resources', resourceRoutes);
