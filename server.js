@@ -18,6 +18,7 @@ const resourceRoutes = require('./routes/resourceRoutes');
 const path = require('path');
 require('./models/RegistrationRequest');
 const jobRoutes = require( './routes/jobRoutes.js');
+const advisorRoutes = require('./routes/advisorRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -129,5 +130,6 @@ app.use('/api/students', studentRoutes);
 app.use('/api/aptitude-tests', aptitudeTestRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/advisors', advisorRoutes);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
