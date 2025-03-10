@@ -412,26 +412,24 @@ exports.endPlacementDrive = async (req, res) => {
 exports.getShortlistTemplate = (req, res) => {
   console.log('DEBUG: Entering getShortlistTemplate');
   try {
-    // Create a workbook
+    console.log('DEBUG: Creating workbook');
     const workbook = xlsx.utils.book_new();
     
-    // Define your headers
     const headers = ['Email'];
-    
-    // Create worksheet with headers
+    console.log('DEBUG: Creating worksheet');
     const worksheet = xlsx.utils.aoa_to_sheet([headers]);
     
-    // Add worksheet to workbook
+    console.log('DEBUG: Appending worksheet');
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Shortlist');
     
-    // Write to buffer
+    console.log('DEBUG: Writing to buffer');
     const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
     
-    // Set headers
+    console.log('DEBUG: Setting headers');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=shortlist_template.xlsx');
     
-    // Send the buffer
+    console.log('DEBUG: Sending buffer');
     return res.send(buffer);
   } catch (error) {
     console.error('ERROR in getShortlistTemplate:', error);
