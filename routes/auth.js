@@ -374,4 +374,34 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
   res.redirect(`http://localhost:5173/${req.user.role}`);
 });
 
+router.get('/me', async (req, res) => {
+  console.log('Session data:', req.session);
+  console.log('User /me:', req.user);
+
+  if (req.isAuthenticated()) {
+    try {
+      const user = await User.findOne({ email: req.user.email });
+      if (!user) return res.status(404).json({ message: 'User not found' });
+
+      console.log(`[ME] Authenticated user: ${user.email}`);
+      return res.json({
+        isAuthenticated: true,
+        user: {
+          _id: user._id,  // ✅ Add this line
+          email: user.email,
+          role: user.role,
+          name: user.name || user.email,
+          batch: user.batch || null
+        }
+      });
+    } catch (err) {
+      console.error(`[ME ERROR] Email: ${req.user.email}, Error: ${err.message}`);
+      return res.status(500).json({ message: 'Server error checking user details' });
+    }
+  } else {
+    console.log('[ME] No authenticated user');
+    return res.json({ isAuthenticated: false, user: null });
+  }
+});
+
 module.exports = router;

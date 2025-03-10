@@ -132,5 +132,5 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/placement-drives', require('./routes/placementDrives'));
 app.use('/api/advisors', advisorRoutes);
-
+app.use('/api/events', require('./routes/eventRoutes'));
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

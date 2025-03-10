@@ -412,27 +412,32 @@ exports.endPlacementDrive = async (req, res) => {
 exports.getShortlistTemplate = (req, res) => {
   console.log('DEBUG: Entering getShortlistTemplate');
   try {
-    const headers = ['Email'];
-    console.log('DEBUG: Creating worksheet with headers:', headers);
-
-    const worksheet = xlsx.utils.aoa_to_sheet([headers]);
-    console.log('DEBUG: Worksheet created');
-
+    // Create a workbook
     const workbook = xlsx.utils.book_new();
-    console.log('DEBUG: Workbook created');
-
+    
+    // Define your headers
+    const headers = ['Email'];
+    
+    // Create worksheet with headers
+    const worksheet = xlsx.utils.aoa_to_sheet([headers]);
+    
+    // Add worksheet to workbook
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Shortlist');
-    console.log('DEBUG: Sheet appended to workbook');
-
-    const excelBuffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    console.log('DEBUG: Excel buffer generated, size:', excelBuffer.length);
-
-    res.setHeader('Content-Disposition', 'attachment; filename=shortlist_template.xlsx');
+    
+    // Write to buffer
+    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.send(excelBuffer);
-    console.log('DEBUG: Response sent successfully');
+    res.setHeader('Content-Disposition', 'attachment; filename=shortlist_template.xlsx');
+    
+    // Send the buffer
+    return res.send(buffer);
   } catch (error) {
-    console.error('ERROR in getShortlistTemplate:', error.message, error.stack);
-    res.status(500).json({ message: 'Error generating shortlist template', error: error.message });
+    console.error('ERROR in getShortlistTemplate:', error);
+    return res.status(500).json({ 
+      message: 'Error generating shortlist template', 
+      error: error.message || 'Unknown error' 
+    });
   }
 };
