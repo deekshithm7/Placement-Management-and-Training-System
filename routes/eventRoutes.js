@@ -11,9 +11,10 @@ const {
 } = require('../controllers/eventController');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 
+router.put('/:id', isAuthenticated, checkRole(["Coordinator"]), updateEvent);
+
 router.get('/',isAuthenticated,checkRole(['Student', "Coordinator","Alumni"]), getEvents); // Public route
 router.post('/', isAuthenticated, checkRole(["Coordinator","Alumni"]), createEvent);
-router.put('/:id', isAuthenticated, checkRole(["Coordinator"]), updateEvent);
 router.put('/register/:id', isAuthenticated, checkRole(['Student', "Coordinator"]), registerEvent);
 router.delete('/:id', isAuthenticated, checkRole(["Coordinator"]), deleteEvent);
 router.get('/:id/registrations', isAuthenticated, checkRole(["Coordinator"]), getRegisteredStudents);
