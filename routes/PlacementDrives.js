@@ -39,5 +39,6 @@ router.post('/apply/:id', isAuthenticated, checkRole(['Student']), applyToPlacem
 router.get('/student/:id', isAuthenticated, checkRole(['Student']), getPlacementDriveById);
 
 router.put('/status/:driveId/:studentId', isAuthenticated, checkRole(['Coordinator']), updateApplicationStatus);
-router.get('/shortlist-template', isAuthenticated, checkRole(['Coordinator']), getShortlistTemplate);
+router.post('/template', isAuthenticated, checkRole(['Coordinator']), getShortlistTemplate);
+
 module.exports = router;
