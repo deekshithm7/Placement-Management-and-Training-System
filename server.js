@@ -19,7 +19,7 @@ const path = require('path');
 require('./models/RegistrationRequest');
 const jobRoutes = require( './routes/jobRoutes.js');
 const advisorRoutes = require('./routes/advisorRoutes');
-
+const notificationRoutes = require('./routes/notificationRoutes');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -133,4 +133,5 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/placement-drives', require('./routes/placementDrives'));
 app.use('/api/advisors', advisorRoutes);
 app.use('/api/events', require('./routes/eventRoutes'));
+app.use('/notifications', notificationRoutes);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
