@@ -99,7 +99,7 @@ passport.deserializeUser(async (id, done) => {
 // Seed data
 // Seed data
 mongoose
-  .connect(process.env.MONGO_URI || 'mongodb+srv://DEEKSHITH:deeku7208@cluster1.gbq6d.mongodb.net/?retryWrites=true&w=majority&appName=Cluster1')
+  .connect(process.env.MONGO_URI )
   .then(async () => {
     console.log('MongoDB connected');
     const userCount = await User.countDocuments();

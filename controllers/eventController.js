@@ -87,6 +87,61 @@ const createEvent = async (req, res) => {
       await Promise.all(emailPromises);
     }
 
+    
+    // Fetch all students from the database
+    const User = require('../models/User'); // Import User model
+    const students = await User.find({ role: 'Student' });
+    
+    // Format date for email
+    const eventDate = new Date(event.date);
+    const formattedDate = eventDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Send email to all students
+    for (const student of students) {
+      await axios.post(
+        "https://api.brevo.com/v3/smtp/email",
+        {
+          sender: { name: "PMTS", email: process.env.BREVO_EMAIL },
+          to: [{ email: student.email }],
+          subject: `New Event: ${event.title}`,
+          htmlContent: `<!DOCTYPE html>
+<html>
+<head><title>New Event Announcement</title></head>
+<body>
+    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif;">
+        <h2>New Event Announcement</h2>
+        <p>A new event has been scheduled. Check out the details below!</p>
+        
+        <div style="background-color:#f5f5f5; padding:15px; border-radius:5px; margin:20px 0; text-align:left;">
+            <h3 style="color:#3366cc;">${event.title}</h3>
+            <p><strong>Mentor:</strong> ${event.mentor}</p>
+            <p><strong>Description:</strong> ${event.description}</p>
+            <p><strong>Date:</strong> ${formattedDate}</p>
+            <p><strong>Time:</strong> ${event.time}</p>
+            <p><strong>Venue:</strong> ${event.venue}</p>
+            <p><strong>Maximum Participants:</strong> ${event.maxParticipants}</p>
+        </div>
+        
+        <p>To register for this event, please log in to your PMTS dashboard.</p>
+        <p>Don't miss this opportunity!</p>
+    </div>
+</body>
+</html>`
+        },
+        {
+          headers: { 
+            "api-key": process.env.BREVO_API_KEY, 
+            "Content-Type": "application/json" 
+          }
+        }
+      );
+    }
+    
     res.status(201).json(savedEvent);
   } catch (error) {
     console.error('Error creating event:', error);
