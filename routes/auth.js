@@ -353,7 +353,8 @@ router.get('/status', async (req, res) => {
           email: user.email,
           role: user.role,
           name: user.name || user.email, // Use name if available, fallback to email
-          batch: user.batch || null // Include batch
+          batch: user.batch || null ,// Include batch
+          branch: user.branch || null // Include branch
         }
       });
     } catch (err) {
@@ -391,7 +392,8 @@ router.get('/me', async (req, res) => {
           email: user.email,
           role: user.role,
           name: user.name || user.email,
-          batch: user.batch || null
+          batch: user.batch || null,
+          branch: user.branch || null
         }
       });
     } catch (err) {
