@@ -1,4 +1,3 @@
-// backend/controllers/eventController.js
 const Event = require('../models/Event');
 const User = require('../models/User');
 const axios = require('axios');
@@ -43,12 +42,23 @@ const getEvents = async (req, res) => {
 const createEvent = async (req, res) => {
   console.log('Received event data:', req.body);
 
-  if (!req.body.title) {
-    return res.status(400).json({ message: 'Title is required' });
+  const { title, mentor, description, date, time, venue, maxParticipants } = req.body;
+  if (!title || !mentor || !description || !date || !time || !venue) {
+    return res.status(400).json({ 
+      message: 'All fields (title, mentor, description, date, time, venue) are required' 
+    });
   }
 
   try {
-    const event = new Event(req.body);
+    const event = new Event({ 
+      title, 
+      mentor, 
+      description, 
+      date, 
+      time, 
+      venue, 
+      maxParticipants // Optional, defaults to 100 if not provided
+    });
     const savedEvent = await event.save();
 
     // Notify all students
@@ -68,48 +78,19 @@ const createEvent = async (req, res) => {
         }
       );
 
+      const eventDate = new Date(savedEvent.date);
+      const formattedDate = eventDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
       const emailPromises = students.map(student =>
         sendEmail(
           student.email,
           `New Event: ${savedEvent.title}`,
-          `
-            <h2>New Event Announcement</h2>
-            <p>A new event has been created:</p>
-            <h3>${savedEvent.title}</h3>
-            <p><strong>Date:</strong> ${new Date(savedEvent.date).toLocaleDateString()}</p>
-            <p><strong>Time:</strong> ${savedEvent.time || 'N/A'}</p>
-            <p><strong>Venue:</strong> ${savedEvent.venue || 'N/A'}</p>
-            <p><strong>Description:</strong> ${savedEvent.description || 'N/A'}</p>
-            <p>Register on your dashboard!</p>
-          `
-        )
-      );
-      await Promise.all(emailPromises);
-    }
-
-    
-    // Fetch all students from the database
-    const User = require('../models/User'); // Import User model
-    const students = await User.find({ role: 'Student' });
-    
-    // Format date for email
-    const eventDate = new Date(event.date);
-    const formattedDate = eventDate.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    // Send email to all students
-    for (const student of students) {
-      await axios.post(
-        "https://api.brevo.com/v3/smtp/email",
-        {
-          sender: { name: "PMTS", email: process.env.BREVO_EMAIL },
-          to: [{ email: student.email }],
-          subject: `New Event: ${event.title}`,
-          htmlContent: `<!DOCTYPE html>
+          `<!DOCTYPE html>
 <html>
 <head><title>New Event Announcement</title></head>
 <body>
@@ -118,13 +99,13 @@ const createEvent = async (req, res) => {
         <p>A new event has been scheduled. Check out the details below!</p>
         
         <div style="background-color:#f5f5f5; padding:15px; border-radius:5px; margin:20px 0; text-align:left;">
-            <h3 style="color:#3366cc;">${event.title}</h3>
-            <p><strong>Mentor:</strong> ${event.mentor}</p>
-            <p><strong>Description:</strong> ${event.description}</p>
+            <h3 style="color:#3366cc;">${savedEvent.title}</h3>
+            <p><strong>Mentor:</strong> ${savedEvent.mentor}</p>
+            <p><strong>Description:</strong> ${savedEvent.description}</p>
             <p><strong>Date:</strong> ${formattedDate}</p>
-            <p><strong>Time:</strong> ${event.time}</p>
-            <p><strong>Venue:</strong> ${event.venue}</p>
-            <p><strong>Maximum Participants:</strong> ${event.maxParticipants}</p>
+            <p><strong>Time:</strong> ${savedEvent.time}</p>
+            <p><strong>Venue:</strong> ${savedEvent.venue}</p>
+            <p><strong>Maximum Participants:</strong> ${savedEvent.maxParticipants}</p>
         </div>
         
         <p>To register for this event, please log in to your PMTS dashboard.</p>
@@ -132,16 +113,11 @@ const createEvent = async (req, res) => {
     </div>
 </body>
 </html>`
-        },
-        {
-          headers: { 
-            "api-key": process.env.BREVO_API_KEY, 
-            "Content-Type": "application/json" 
-          }
-        }
+        )
       );
+      await Promise.all(emailPromises);
     }
-    
+
     res.status(201).json(savedEvent);
   } catch (error) {
     console.error('Error creating event:', error);
@@ -178,7 +154,6 @@ const registerEvent = async (req, res) => {
     event.registeredStudents.push(studentId);
     const updatedEvent = await event.save();
 
-    // Notify the student
     await User.updateOne(
       { _id: studentId },
       {
@@ -200,8 +175,8 @@ const registerEvent = async (req, res) => {
         <p>You have successfully registered for:</p>
         <h3>${event.title}</h3>
         <p><strong>Date:</strong> ${new Date(event.date).toLocaleDateString()}</p>
-        <p><strong>Time:</strong> ${event.time || 'N/A'}</p>
-        <p><strong>Venue:</strong> ${event.venue || 'N/A'}</p>
+        <p><strong>Time:</strong> ${event.time}</p>
+        <p><strong>Venue:</strong> ${event.venue}</p>
         <p>See you there!</p>
       `
     );
@@ -222,7 +197,6 @@ const updateEvent = async (req, res) => {
     const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
-    // Notify registered students of update
     const students = await User.find({ _id: { $in: event.registeredStudents } });
     if (students.length > 0) {
       await User.updateMany(
@@ -247,9 +221,9 @@ const updateEvent = async (req, res) => {
             <h2>Event Update</h2>
             <p>The event <strong>${event.title}</strong> has been updated:</p>
             <p><strong>Date:</strong> ${new Date(event.date).toLocaleDateString()}</p>
-            <p><strong>Time:</strong> ${event.time || 'N/A'}</p>
-            <p><strong>Venue:</strong> ${event.venue || 'N/A'}</p>
-            <p><strong>Description:</strong> ${event.description || 'N/A'}</p>
+            <p><strong>Time:</strong> ${event.time}</p>
+            <p><strong>Venue:</strong> ${event.venue}</p>
+            <p><strong>Description:</strong> ${event.description}</p>
             <p>Check your dashboard for details!</p>
           `
         )
@@ -269,7 +243,6 @@ const deleteEvent = async (req, res) => {
     const event = await Event.findByIdAndDelete(req.params.id);
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
-    // Notify registered students of cancellation
     const students = await User.find({ _id: { $in: event.registeredStudents } });
     if (students.length > 0) {
       await User.updateMany(
@@ -327,11 +300,11 @@ const getRegisteredStudents = async (req, res) => {
 
     res.json({
       event: {
-        title: event.title || 'N/A',
-        date: event.date || 'N/A',
-        time: event.time || 'N/A',
-        venue: event.venue || 'N/A',
-        mentor: event.mentor || 'N/A',
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        venue: event.venue,
+        mentor: event.mentor,
       },
       students: registeredStudents,
     });
@@ -355,7 +328,6 @@ const unregisterStudent = async (req, res) => {
     event.registeredStudents.splice(studentIndex, 1);
     const updatedEvent = await event.save();
 
-    // Notify the student
     const student = await User.findById(studentId);
     if (student) {
       await User.updateOne(
