@@ -6,12 +6,16 @@ const validateStudentData = (studentData, advisorBranch) => {
   const errors = [];
 
   if (studentData.branch !== advisorBranch) {
+    console.log(`Branch mismatch. Student branch (${studentData.branch}) does not match advisor's branch (${advisorBranch})`);
     errors.push(`Branch mismatch. Student branch (${studentData.branch}) does not match advisor's branch (${advisorBranch})`);
   }
 
   const requiredFields = ['name', 'email', 'batch', 'registrationNumber', 'branch'];
   requiredFields.forEach(field => {
-    if (!studentData[field]) errors.push(`Missing required field: ${field}`);
+    if (!studentData[field]) {
+      console.log(`Missing required field: ${field}`);
+      errors.push(`Missing required field: ${field}`);
+    }
   });
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,11 +24,13 @@ const validateStudentData = (studentData, advisorBranch) => {
   }
 
   if (studentData.cgpa !== undefined && (isNaN(studentData.cgpa) || studentData.cgpa < 0 || studentData.cgpa > 10)) {
+    console.log('CGPA must be a number between 0 and 10');
     errors.push('CGPA must be a number between 0 and 10');
   }
 
   if (studentData.semestersCompleted !== undefined && 
       (isNaN(studentData.semestersCompleted) || studentData.semestersCompleted < 0)) {
+        console.log('Semesters completed must be a non-negative number');
     errors.push('Semesters completed must be a non-negative number');
   }
 
