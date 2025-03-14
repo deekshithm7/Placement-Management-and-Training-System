@@ -404,4 +404,72 @@ router.get('/me', async (req, res) => {
   }
 });
 
+
+// Forgot Password - Send OTP
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+    if (!user || !user.registered) {
+      return res.status(404).json({ message: 'Email not found or not registered' });
+    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpToken = jwt.sign(
+      { email: user.email, id: user._id, otp },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+
+    // Send OTP email
+    const emailContent = `
+      <h2>Password Reset OTP</h2>
+      <p>Dear ${user.name || 'User'},</p>
+      <p>Your OTP for password reset is: <strong>${otp}</strong></p>
+      <p>This OTP is valid for 15 minutes.</p>
+      <p>If you didn’t request this, please ignore this email.</p>
+      <p>Thank you,<br>PMTS Team</p>
+    `;
+
+    await sendEmail(email, 'Password Reset OTP', emailContent);
+    console.log(`[FORGOT-PASSWORD] OTP sent to: ${email}`);
+    res.json({ 
+      message: 'OTP sent to your email',
+      otpToken 
+    });
+  } catch (err) {
+    console.error(`[FORGOT-PASSWORD ERROR] Email: ${email}, Error: ${err.message}`);
+    res.status(500).json({ message: 'Error sending OTP' });
+  }
+});
+
+// Reset Password with OTP Verification
+router.post('/reset-password', async (req, res) => {
+  const { token, otp, newPassword } = req.body;
+  try {
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.otp !== otp) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    const user = await User.findOne({ email: decoded.email, _id: decoded.id });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    user.updatedAt = new Date();
+    await user.save();
+
+    console.log(`[RESET-PASSWORD SUCCESS] User: ${user.email}`);
+    res.json({ message: 'Password reset successful' });
+  } catch (err) {
+    console.error(`[RESET-PASSWORD ERROR] Error: ${err.message}`);
+    res.status(400).json({ message: 'Invalid or expired token/OTP' });
+  }
+});
 module.exports = router;

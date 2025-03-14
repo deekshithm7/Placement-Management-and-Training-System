@@ -19,6 +19,7 @@ const path = require('path');
 require('./models/RegistrationRequest');
 const jobRoutes = require( './routes/jobRoutes.js');
 const advisorRoutes = require('./routes/advisorRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const analyticsRoutes = require('./routes/analyticRoutes.js');
 
 const app = express();
