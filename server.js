@@ -20,6 +20,8 @@ require('./models/RegistrationRequest');
 const jobRoutes = require( './routes/jobRoutes.js');
 const advisorRoutes = require('./routes/advisorRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const analyticsRoutes = require('./routes/analyticRoutes.js');
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -112,7 +114,7 @@ mongoose
         { name: 'Carol Williams', email: 'carol.advisor@gcek.ac.in', password: await bcrypt.hash('carolPass123', salt), role: 'Advisor', registered: true, branch: 'Electrical' },
         { name: 'David Brown', email: 'david.coord@gcek.ac.in', password: await bcrypt.hash('davidPass123', salt), role: 'Coordinator', registered: true },
         { name: 'Eve Davis', email: 'eve.student@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Civil' },
-        { name: 'anto joji', email: '21b235@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU004', batch: 2024, branch: 'Cse' },
+        { name: 'anto joji', email: '21b235@gcek.ac.in', password: null, role: 'Student', registered: false, registrationNumber: 'STU005', batch: 2024, branch: 'Cse' },
       ]);
       console.log('Users seeded successfully');
     }
@@ -133,5 +135,6 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/placement-drives', require('./routes/placementDrives'));
 app.use('/api/advisors', advisorRoutes);
 app.use('/api/events', require('./routes/eventRoutes'));
-app.use('/notifications', notificationRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
