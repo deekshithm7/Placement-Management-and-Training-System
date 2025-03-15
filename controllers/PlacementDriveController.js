@@ -1,15 +1,17 @@
+// backend/controllers/placementDriveController.js
 const PlacementDrive = require('../models/PlacementDrive');
 const User = require('../models/User');
 const xlsx = require('xlsx');
-const axios = require('axios'); // Add this
+const axios = require('axios');
+
 const sendPhaseEmail = async (students, phaseName, companyName, role, requirements, instructions) => {
   console.log('DEBUG: Sending emails to:', students.map(s => s.email));
   try {
-    const emailPromises = students.map(student => 
+    const emailPromises = students.map(student =>
       axios.post(
-        "https://api.brevo.com/v3/smtp/email",
+        'https://api.brevo.com/v3/smtp/email',
         {
-          sender: { name: "PMTS", email: process.env.BREVO_EMAIL },
+          sender: { name: 'PMTS', email: process.env.BREVO_EMAIL },
           to: [{ email: student.email }],
           subject: `Shortlisted for ${phaseName} - ${companyName} (${role})`,
           htmlContent: `<!DOCTYPE html>
@@ -26,13 +28,10 @@ const sendPhaseEmail = async (students, phaseName, companyName, role, requiremen
         <p>Please prepare accordingly and check your dashboard for updates.</p>
     </div>
 </body>
-</html>`
+</html>`,
         },
         {
-          headers: { 
-            "api-key": process.env.BREVO_API_KEY, 
-            "Content-Type": "application/json" 
-          }
+          headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
         }
       )
     );
@@ -48,9 +47,9 @@ const sendApplicationEmail = async (student, placementDrive) => {
   console.log('DEBUG: Sending application email to:', student.email);
   try {
     const response = await axios.post(
-      "https://api.brevo.com/v3/smtp/email",
+      'https://api.brevo.com/v3/smtp/email',
       {
-        sender: { name: "PMTS", email: process.env.BREVO_EMAIL },
+        sender: { name: 'PMTS', email: process.env.BREVO_EMAIL },
         to: [{ email: student.email }],
         subject: `Application Successful - ${placementDrive.companyName} (${placementDrive.role})`,
         htmlContent: `<!DOCTYPE html>
@@ -71,13 +70,10 @@ const sendApplicationEmail = async (student, placementDrive) => {
         <p>Please stay updated via your dashboard for further instructions.</p>
     </div>
 </body>
-</html>`
+</html>`,
       },
       {
-        headers: { 
-          "api-key": process.env.BREVO_API_KEY, 
-          "Content-Type": "application/json" 
-        }
+        headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
       }
     );
     console.log('DEBUG: Application email sent successfully:', response.data);
@@ -90,11 +86,11 @@ const sendApplicationEmail = async (student, placementDrive) => {
 const sendDriveCreationEmail = async (students, placementDrive) => {
   console.log('DEBUG: Sending drive creation emails to:', students.map(s => s.email));
   try {
-    const emailPromises = students.map(student => 
+    const emailPromises = students.map(student =>
       axios.post(
-        "https://api.brevo.com/v3/smtp/email",
+        'https://api.brevo.com/v3/smtp/email',
         {
-          sender: { name: "PMTS", email: process.env.BREVO_EMAIL },
+          sender: { name: 'PMTS', email: process.env.BREVO_EMAIL },
           to: [{ email: student.email }],
           subject: `New Placement Drive: ${placementDrive.companyName} (${placementDrive.role})`,
           htmlContent: `<!DOCTYPE html>
@@ -115,13 +111,10 @@ const sendDriveCreationEmail = async (students, placementDrive) => {
         <p>Log in to your dashboard to apply!</p>
     </div>
 </body>
-</html>`
+</html>`,
         },
         {
-          headers: { 
-            "api-key": process.env.BREVO_API_KEY, 
-            "Content-Type": "application/json" 
-          }
+          headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
         }
       )
     );
@@ -147,31 +140,38 @@ exports.createPlacementDrive = async (req, res) => {
       eligibleBranches,
       minSemestersCompleted: minSemestersCompleted || 0,
       date,
-      createdBy: req.user._id
+      createdBy: req.user._id,
     });
     await placementDrive.save();
     console.log('DEBUG: Placement drive created, ID:', placementDrive._id);
 
-    // Find eligible students with case-insensitive branch check
     console.log('DEBUG: Finding eligible students');
     const eligibleStudents = await User.find({
       role: 'Student',
-      branch: { $in: eligibleBranches.map(branch => new RegExp(`^${branch}$`, 'i')) }, // Case-insensitive match
+      branch: { $in: eligibleBranches.map(branch => new RegExp(`^${branch}$`, 'i')) },
       cgpa: { $gte: minCGPA || 0 },
       numberOfBacklogs: { $lte: maxBacklogs || 0 },
-      semestersCompleted: { $gte: minSemestersCompleted || 0 }
+      semestersCompleted: { $gte: minSemestersCompleted || 0 },
     });
     console.log('DEBUG: Eligible students found:', eligibleStudents.length);
 
-    // Update students' eligibleDrives
     if (eligibleStudents.length > 0) {
       await User.updateMany(
         { _id: { $in: eligibleStudents.map(s => s._id) } },
-        { $addToSet: { eligibleDrives: placementDrive._id } }
+        {
+          $addToSet: { eligibleDrives: placementDrive._id },
+          $push: {
+            notifications: {
+              message: `New placement drive: ${companyName} - ${role}`,
+              type: 'info',
+              link: '/student/placement',
+              relatedId: placementDrive._id,
+            },
+          },
+        }
       );
-      console.log('DEBUG: Updated eligibleDrives for students');
+      console.log('DEBUG: Updated eligibleDrives and notifications for students');
 
-      // Send emails to eligible students
       await sendDriveCreationEmail(eligibleStudents, placementDrive);
     }
 
@@ -184,7 +184,7 @@ exports.createPlacementDrive = async (req, res) => {
 
 exports.getAllPlacementDrives = async (req, res) => {
   try {
-    const { year } = req.query; // Get year from query parameter
+    const { year } = req.query;
     console.log('DEBUG: Fetching all placement drives, year filter:', year);
 
     let query = {};
@@ -195,7 +195,7 @@ exports.getAllPlacementDrives = async (req, res) => {
     }
 
     const placementDrives = await PlacementDrive.find(query)
-      .sort({ createdAt: -1 }) // Latest first
+      .sort({ createdAt: -1 })
       .populate('applications.student', 'name email registrationNumber branch cgpa numberOfBacklogs semestersCompleted')
       .populate('phases.shortlistedStudents', 'name email registrationNumber')
       .populate('createdBy', 'name email');
@@ -238,10 +238,12 @@ exports.applyToPlacementDrive = async (req, res) => {
 
     const student = req.user;
     console.log('DEBUG: Student applying:', student.email);
-    if (!placementDrive.eligibleBranches.some(b => new RegExp(`^${b}$`, 'i').test(student.branch)) ||
-        (student.cgpa || 0) < placementDrive.minCGPA ||
-        (student.numberOfBacklogs || 0) > placementDrive.maxBacklogs ||
-        (student.semestersCompleted || 0) < placementDrive.minSemestersCompleted) {
+    if (
+      !placementDrive.eligibleBranches.some(b => new RegExp(`^${b}$`, 'i').test(student.branch)) ||
+      (student.cgpa || 0) < placementDrive.minCGPA ||
+      (student.numberOfBacklogs || 0) > placementDrive.maxBacklogs ||
+      (student.semestersCompleted || 0) < placementDrive.minSemestersCompleted
+    ) {
       console.log('DEBUG: Student not eligible');
       return res.status(403).json({ message: 'You are not eligible for this placement drive' });
     }
@@ -255,10 +257,19 @@ exports.applyToPlacementDrive = async (req, res) => {
     placementDrive.applications.push({ student: student._id });
     await placementDrive.save();
 
-    console.log('DEBUG: Updating student eligible drives');
-    await User.findByIdAndUpdate(student._id, { $addToSet: { eligibleDrives: placementDrive._id } });
+    console.log('DEBUG: Updating student eligible drives and notification');
+    await User.findByIdAndUpdate(student._id, {
+      $addToSet: { eligibleDrives: placementDrive._id },
+      $push: {
+        notifications: {
+          message: `Application successful for ${placementDrive.companyName} - ${placementDrive.role}`,
+          type: 'success',
+          link: '/student/placement',
+          relatedId: placementDrive._id,
+        },
+      },
+    });
 
-    // Send email notification
     await sendApplicationEmail(student, placementDrive);
 
     res.status(200).json({ message: 'Successfully applied to placement drive' });
@@ -290,6 +301,34 @@ exports.updateApplicationStatus = async (req, res) => {
     application.status = status;
     application.updatedAt = new Date();
     await placementDrive.save();
+
+    // Notify student of status update
+    const student = await User.findById(studentId);
+    if (student) {
+      await User.updateOne(
+        { _id: studentId },
+        {
+          $push: {
+            notifications: {
+              message: `Application status updated to "${status}" for ${placementDrive.companyName} - ${placementDrive.role}`,
+              type: status === 'Selected' ? 'success' : 'info',
+              link: '/student/placement',
+              relatedId: placementDrive._id,
+            },
+          },
+        }
+      );
+      // Optional: Send email for status update (not in original, but added for consistency)
+      await sendEmail(
+        student.email,
+        `Application Status Update: ${placementDrive.companyName} (${placementDrive.role})`,
+        `
+          <h2>Application Status Update</h2>
+          <p>Your application status for ${placementDrive.companyName} - ${placementDrive.role} has been updated to <strong>${status}</strong>.</p>
+          <p>Check your dashboard for more details!</p>
+        `
+      );
+    }
 
     res.status(200).json({ message: 'Application status updated successfully', placementDrive });
   } catch (error) {
@@ -323,17 +362,17 @@ exports.addPhaseToDrive = async (req, res) => {
       const worksheet = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
       const emails = worksheet.map(row => row.Email?.trim().toLowerCase()).filter(email => email);
 
-      const students = await User.find({ 
-        email: { $in: emails.map(email => new RegExp(`^${email}$`, 'i')) }, 
-        role: 'Student' 
+      const students = await User.find({
+        email: { $in: emails.map(email => new RegExp(`^${email}$`, 'i')) },
+        role: 'Student',
       });
       shortlistedStudents = students.map(student => student._id);
 
       const invalidEmails = emails.filter(email => !students.some(s => s.email.toLowerCase() === email));
       if (invalidEmails.length > 0) {
-        return res.status(400).json({ 
-          message: `The following emails are invalid or not registered students: ${invalidEmails.join(', ')}`, 
-          invalidEmails 
+        return res.status(400).json({
+          message: `The following emails are invalid or not registered students: ${invalidEmails.join(', ')}`,
+          invalidEmails,
         });
       }
     } else {
@@ -346,8 +385,23 @@ exports.addPhaseToDrive = async (req, res) => {
     placementDrive.updatedAt = new Date();
     await placementDrive.save();
 
-    // Send emails
-    await sendPhaseEmail(students, phaseName, placementDrive.companyName, placementDrive.role, requirements, instructions);
+    // Notify shortlisted students
+    if (students.length > 0) {
+      await User.updateMany(
+        { _id: { $in: shortlistedStudents } },
+        {
+          $push: {
+            notifications: {
+              message: `Shortlisted for ${phaseName} - ${placementDrive.companyName} (${placementDrive.role})`,
+              type: 'success',
+              link: '/student/placement',
+              relatedId: placementDrive._id,
+            },
+          },
+        }
+      );
+      await sendPhaseEmail(students, phaseName, placementDrive.companyName, placementDrive.role, requirements, instructions);
+    }
 
     res.status(200).json({ message: `Phase ${phaseName} added successfully`, placementDrive });
   } catch (error) {
@@ -359,7 +413,7 @@ exports.addPhaseToDrive = async (req, res) => {
 exports.endPlacementDrive = async (req, res) => {
   const { id } = req.params;
   const shortlistFile = req.file;
-  const { requirements, instructions } = req.body; // Add these from request body
+  const { requirements, instructions } = req.body;
 
   console.log('DEBUG: Entering endPlacementDrive, ID:', id);
   console.log('DEBUG: Shortlist file:', shortlistFile ? shortlistFile.originalname : 'None');
@@ -381,17 +435,17 @@ exports.endPlacementDrive = async (req, res) => {
     const worksheet = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
     const emails = worksheet.map(row => row.Email?.trim().toLowerCase()).filter(email => email);
 
-    const students = await User.find({ 
-      email: { $in: emails.map(email => new RegExp(`^${email}$`, 'i')) }, 
-      role: 'Student' 
+    const students = await User.find({
+      email: { $in: emails.map(email => new RegExp(`^${email}$`, 'i')) },
+      role: 'Student',
     });
     const shortlistedStudents = students.map(student => student._id);
 
     const invalidEmails = emails.filter(email => !students.some(s => s.email.toLowerCase() === email));
     if (invalidEmails.length > 0) {
-      return res.status(400).json({ 
-        message: `The following emails are invalid or not registered students: ${invalidEmails.join(', ')}`, 
-        invalidEmails 
+      return res.status(400).json({
+        message: `The following emails are invalid or not registered students: ${invalidEmails.join(', ')}`,
+        invalidEmails,
       });
     }
 
@@ -400,8 +454,23 @@ exports.endPlacementDrive = async (req, res) => {
     placementDrive.updatedAt = new Date();
     await placementDrive.save();
 
-    // Send emails
-    await sendPhaseEmail(students, 'Final Selection', placementDrive.companyName, placementDrive.role, requirements, instructions);
+    // Notify selected students
+    if (students.length > 0) {
+      await User.updateMany(
+        { _id: { $in: shortlistedStudents } },
+        {
+          $push: {
+            notifications: {
+              message: `Congratulations! Selected for ${placementDrive.companyName} (${placementDrive.role})`,
+              type: 'success',
+              link: '/student/placement',
+              relatedId: placementDrive._id,
+            },
+          },
+        }
+      );
+      await sendPhaseEmail(students, 'Final Selection', placementDrive.companyName, placementDrive.role, requirements, instructions);
+    }
 
     res.status(200).json({ message: 'Placement drive ended successfully', placementDrive });
   } catch (error) {
@@ -409,33 +478,33 @@ exports.endPlacementDrive = async (req, res) => {
     res.status(500).json({ message: 'Error ending placement drive', error: error.message });
   }
 };
+
 exports.getShortlistTemplate = (req, res) => {
+  // Unchanged, no notification needed
   console.log('DEBUG: Entering getShortlistTemplate');
   try {
-    console.log('DEBUG: Creating workbook');
     const workbook = xlsx.utils.book_new();
-    
+    if (!workbook) throw new Error('Failed to create workbook');
+
     const headers = ['Email'];
-    console.log('DEBUG: Creating worksheet');
     const worksheet = xlsx.utils.aoa_to_sheet([headers]);
-    
-    console.log('DEBUG: Appending worksheet');
+    if (!worksheet) throw new Error('Failed to create worksheet');
+
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Shortlist');
-    
-    console.log('DEBUG: Writing to buffer');
+
     const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    
-    console.log('DEBUG: Setting headers');
+    if (!buffer || buffer.length === 0) throw new Error('Failed to generate buffer');
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=shortlist_template.xlsx');
-    
-    console.log('DEBUG: Sending buffer');
+
     return res.send(buffer);
   } catch (error) {
     console.error('ERROR in getShortlistTemplate:', error);
-    return res.status(500).json({ 
-      message: 'Error generating shortlist template', 
-      error: error.message || 'Unknown error' 
+    return res.status(500).json({
+      message: 'Error generating shortlist template',
+      error: error.message || 'Unknown error',
     });
   }
 };
+
