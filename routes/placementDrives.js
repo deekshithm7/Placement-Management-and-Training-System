@@ -9,7 +9,7 @@ const {
   addPhaseToDrive,
   endPlacementDrive,
   getShortlistTemplate
-} = require('../controllers/placementDriveController');
+} = require('../controllers/PlacementDriveController');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
 
