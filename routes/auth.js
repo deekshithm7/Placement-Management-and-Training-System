@@ -56,6 +56,7 @@ router.post('/send-registration-otp', async (req, res) => {
     if (!user || !['Student', 'Alumni'].includes(user.role)) return res.status(400).json({ message: !user ? 'Email not found' : 'Registration only allowed for students and alumni' });
     if (user.registered) return res.status(400).json({ message: 'Email already registered' });
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[SEND-OTP] OTP sent to: ${email} : ${otp}`);
     const otpToken = jwt.sign({ email, role: user.role, otp }, process.env.JWT_SECRET, { expiresIn: '10m' });
     try {
       const response = await axios.post(
@@ -175,7 +176,7 @@ router.post('/send-alumni-otp', async (req, res) => {
     
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+    console.log(`[SEND-OTP] OTP sent to: ${email} : ${otp}`);
     // Create OTP token (valid for 10 minutes)
     const otpToken = jwt.sign(
       { name, batchYear, branch, email, password, role: 'Alumni', otp },

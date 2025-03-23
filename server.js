@@ -26,7 +26,10 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(cors({ 
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173', 
+  credentials: true 
+}));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
@@ -61,7 +64,7 @@ passport.use(new LocalStrategy(
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,  
-  callbackURL: `http://localhost:${PORT}/auth/google/callback`,
+  callbackURL: `${process.env.FRONTEND_URL}/auth/google/callback`,
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     let user = await User.findOne({ googleId: profile.id });
