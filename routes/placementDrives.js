@@ -12,7 +12,7 @@ const {
 } = require('../controllers/placementDriveController');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
-
+const PlacementDrive = require('../models/PlacementDrive'); // Import the model
 const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
@@ -40,5 +40,37 @@ router.get('/student/:id', isAuthenticated, checkRole(['Student']), getPlacement
 
 router.put('/status/:driveId/:studentId', isAuthenticated, checkRole(['Coordinator']), updateApplicationStatus);
 router.post('/template', isAuthenticated, checkRole(['Coordinator']), getShortlistTemplate);
+// backend/routes/studentRoutes.js (assumed file)
+router.get('/placements/me', isAuthenticated, checkRole(['Student']), async (req, res) => {
+  try {
+    const studentId = req.user._id;
+    const placementDrives = await PlacementDrive.find({ 'applications.student': studentId })
+      .populate('applications.student', 'name email registrationNumber')
+      .populate('phases.shortlistedStudents', 'name email registrationNumber');
 
+    const drivesWithDetails = placementDrives.map(drive => {
+      const currentPhase = drive.phases.length > 0 ? drive.phases[drive.phases.length - 1] : null;
+      const studentApp = drive.applications.find(app => app.student._id.equals(studentId));
+      const studentPhaseStatus = currentPhase 
+        ? (currentPhase.shortlistedStudents.some(s => s._id.equals(studentId)) ? 'Shortlisted' : 'Rejected') 
+        : null;
+
+      return {
+        ...drive.toObject(),
+        status: studentApp ? studentApp.status : 'Not Applied',
+        currentPhase: currentPhase ? {
+          name: currentPhase.name,
+          createdAt: currentPhase.createdAt,
+          requirements: currentPhase.requirements,
+          instructions: currentPhase.instructions,
+        } : null,
+        studentPhaseStatus,
+      };
+    });
+
+    res.status(200).json({ eligibleDrives: drivesWithDetails });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching student drives', error: error.message });
+  }
+});
 module.exports = router;

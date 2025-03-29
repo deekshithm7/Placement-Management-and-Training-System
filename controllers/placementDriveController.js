@@ -208,23 +208,49 @@ exports.getAllPlacementDrives = async (req, res) => {
   }
 };
 
+// backend/controllers/placementDriveController.js
 exports.getPlacementDriveById = async (req, res) => {
   const { id } = req.params;
 
   try {
     const placementDrive = await PlacementDrive.findById(id)
       .populate('createdBy', 'name email')
-      .populate('applications.student', 'name email registrationNumber')
+      .populate('applications.student', 'name email registrationNumber branch') // Add 'branch'
       .populate('phases.shortlistedStudents', 'name email registrationNumber');
+
     if (!placementDrive) {
       return res.status(404).json({ message: 'Placement drive not found' });
     }
-    res.status(200).json(placementDrive);
+
+    // Determine the current phase (the last phase added, if any)
+    const currentPhase = placementDrive.phases.length > 0 
+      ? placementDrive.phases[placementDrive.phases.length - 1] 
+      : null;
+
+    // Add current phase and student status to the response
+    const response = {
+      ...placementDrive.toObject(),
+      currentPhase: currentPhase ? {
+        name: currentPhase.name,
+        createdAt: currentPhase.createdAt,
+        requirements: currentPhase.requirements,
+        instructions: currentPhase.instructions,
+      } : null,
+      studentPhaseStatus: null,
+    };
+
+    // If the user is a student, determine their status for the current phase
+    if (req.user.role === 'Student' && currentPhase) {
+      const studentId = req.user._id;
+      const isShortlisted = currentPhase.shortlistedStudents.some(s => s._id.equals(studentId));
+      response.studentPhaseStatus = isShortlisted ? 'Shortlisted' : 'Rejected';
+    }
+
+    res.status(200).json(response);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching placement drive', error: error.message });
   }
 };
-
 exports.applyToPlacementDrive = async (req, res) => {
   const { id } = req.params;
 

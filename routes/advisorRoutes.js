@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const axios = require('axios');
+const PlacementDrive = require('../models/PlacementDrive'); // Import the model
 
 // Helper function to send emails via Brevo API (reusing from auth routes)
 async function sendEmail(recipient, subject, content) {
@@ -31,6 +32,55 @@ async function sendEmail(recipient, subject, content) {
     throw new Error('Failed to send email');
   }
 }
+  // Get all placement drives for the advisor's branch (Advisor only)
+  router.get('/placements', isAuthenticated, checkRole(['Advisor']), async (req, res) => {
+    try {
+      const advisorBranch = req.user.branch; // Advisor's branch from authenticated user
+      console.log(`[GET-ADVISOR-PLACEMENTS] Fetching placements for branch: ${advisorBranch}`);
+  
+      // Fetch placement drives where the advisor's branch is eligible
+      const placementDrives = await PlacementDrive.find({
+        eligibleBranches: { $in: [new RegExp(`^${advisorBranch}$`, 'i')] },
+      })
+        .populate('applications.student', 'name email registrationNumber branch')
+        .populate('phases.shortlistedStudents', 'name email registrationNumber')
+        .populate('createdBy', 'name email')
+        .sort({ createdAt: -1 });
+  
+      // Filter applications and phases, safely handling undefined values
+      const drivesWithBranchDetails = placementDrives.map(drive => {
+        const branchApplications = drive.applications.filter(app => {
+          // Check if app.student and app.student.branch exist before calling toLowerCase
+          return app.student && app.student.branch && 
+                 app.student.branch.toLowerCase() === advisorBranch.toLowerCase();
+        });
+  
+        const phasesWithStatus = drive.phases.map(phase => ({
+          name: phase.name,
+          createdAt: phase.createdAt,
+          requirements: phase.requirements,
+          instructions: phase.instructions,
+          shortlistedStudents: phase.shortlistedStudents.filter(student => 
+            student && student.branch && 
+            student.branch.toLowerCase() === advisorBranch.toLowerCase()
+          ),
+        }));
+  
+        return {
+          ...drive.toObject(),
+          applications: branchApplications,
+          phases: phasesWithStatus,
+          totalApplicationsFromBranch: branchApplications.length,
+        };
+      });
+  
+      console.log(`[GET-ADVISOR-PLACEMENTS] Retrieved ${drivesWithBranchDetails.length} drives`);
+      res.json(drivesWithBranchDetails);
+    } catch (error) {
+      console.error('[GET-ADVISOR-PLACEMENTS ERROR]', error);
+      res.status(500).json({ message: 'Error retrieving placement drives', error: error.message });
+    }
+  });
 
 // Add a new advisor (Coordinator only)
 router.post('/add', isAuthenticated, checkRole(['Coordinator']), async (req, res) => {
@@ -199,5 +249,6 @@ router.delete('/:id', isAuthenticated, checkRole(['Coordinator']), async (req, r
     res.status(500).json({ message: 'Error deleting advisor' });
   }
 });
+
 
 module.exports = router;
