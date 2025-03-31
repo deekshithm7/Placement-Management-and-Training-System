@@ -26,6 +26,33 @@ const upload = multer({
     }
   }
 });
+// backend/routes/placementDriveRoutes.js
+router.get('/public', async (req, res) => {
+  try {
+    const currentDate = new Date();
+    const placementDrives = await PlacementDrive.find({
+      date: { $gte: currentDate }, // Upcoming drives
+      status: { $in: ['Open', 'In Progress'] }, // Only active drives
+    })
+      .select('companyName role date eligibleBranches minCGPA status') // Select only necessary fields
+      .lean();
+
+    // Add status tagging
+    const drivesWithStatus = placementDrives.map(drive => ({
+      companyName: drive.companyName,
+      role: drive.role,
+      date: drive.date,
+      eligibleBranches: drive.eligibleBranches,
+      minCGPA: drive.minCGPA,
+      status: drive.status === 'Open' && new Date(drive.date) > currentDate ? 'Upcoming' : 'Ongoing',
+    }));
+
+    res.json(drivesWithStatus);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 
 // Coordinator routes
 router.post('/create', isAuthenticated, checkRole(['Coordinator']), createPlacementDrive);
@@ -40,7 +67,7 @@ router.get('/student/:id', isAuthenticated, checkRole(['Student']), getPlacement
 
 router.put('/status/:driveId/:studentId', isAuthenticated, checkRole(['Coordinator']), updateApplicationStatus);
 router.post('/template', isAuthenticated, checkRole(['Coordinator']), getShortlistTemplate);
-// backend/routes/studentRoutes.js (assumed file)
+
 router.get('/placements/me', isAuthenticated, checkRole(['Student']), async (req, res) => {
   try {
     const studentId = req.user._id;
@@ -73,4 +100,6 @@ router.get('/placements/me', isAuthenticated, checkRole(['Student']), async (req
     res.status(500).json({ message: 'Error fetching student drives', error: error.message });
   }
 });
+
+
 module.exports = router;
