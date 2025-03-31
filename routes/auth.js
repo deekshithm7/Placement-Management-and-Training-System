@@ -371,9 +371,9 @@ router.get('/status', async (req, res) => {
 
 
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-router.get('/google/callback', passport.authenticate('google', { failureRedirect: `http://localhost:5173/` }), (req, res) => {
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login` }), (req, res) => {
   console.log(`[GOOGLE LOGIN SUCCESS] User: ${req.user.email}, Role: ${req.user.role}`);
-  res.redirect(`http://localhost:5173/${req.user.role}`);
+  res.redirect(`${process.env.FRONTEND_URL}/${req.user.role}`);
 });
 
 router.get('/me', async (req, res) => {
