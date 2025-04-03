@@ -117,7 +117,7 @@ router.post('/add', isAuthenticated, checkRole(['Coordinator']), async (req, res
     await newAdvisor.save();
     
     // Send welcome email to the advisor
-    const loginUrl = "https://pmts/login";
+    const loginUrl = "https://pmts-frontend-production.up.railway.app";
     const emailContent = `
     <!DOCTYPE html>
     <html>

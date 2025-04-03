@@ -107,7 +107,7 @@ router.post('/verify-and-set-password', async (req, res) => {
     user.updatedAt = new Date();
     await user.save();
     console.log(`[REGISTER SUCCESS] User: ${email}, Role: ${user.role}`);
-    const loginUrl = "https://pmts/login";
+    const loginUrl = "https://pmts-frontend-production.up.railway.app";
     try {
       const response = await axios.post(
         "https://api.brevo.com/v3/smtp/email",
@@ -391,6 +391,7 @@ router.get('/me', async (req, res) => {
         user: {
           _id: user._id,  // ✅ Add this line
           email: user.email,
+          registrationNumber: user.registrationNumber,
           role: user.role,
           name: user.name || user.email,
           batch: user.batch || null,

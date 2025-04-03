@@ -115,7 +115,7 @@ router.put('/approve-alumni-request/:id', checkRole(['Advisor', 'Coordinator']),
       <h2>Alumni Registration Approved</h2>
       <p>Dear ${registrationRequest.name},</p>
       <p>Your alumni registration has been approved. You can now log in to the PMTS system.</p>
-      <p><a href="https://pmts/login">Click here to login</a></p>
+      <p><a href="https://pmts-frontend-production.up.railway.app">Click here to login</a></p>
       <p>Thank you,<br>PMTS Team</p>
     `;
     

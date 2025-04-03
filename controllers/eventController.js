@@ -305,6 +305,7 @@ const getRegisteredStudents = async (req, res) => {
         time: event.time,
         venue: event.venue,
         mentor: event.mentor,
+        maxParticipants: event.maxParticipants
       },
       students: registeredStudents,
     });
