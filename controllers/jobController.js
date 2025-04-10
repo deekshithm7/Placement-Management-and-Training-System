@@ -61,7 +61,14 @@ const getJobById = async (req, res) => {
 const createJob = async (req, res) => {
   try {
     const { title, company, description, applyUrl, applicationDeadline } = req.body;
-
+    
+    const existingJob = await Job.findOne({ title, company });
+    if (existingJob) {
+      return res.status(400).json({ 
+        msg: 'A job with this title from the same company already exists', 
+        existingJobId: existingJob._id 
+      });
+    }
     const newJob = new Job({
       title,
       company,

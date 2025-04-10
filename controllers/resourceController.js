@@ -6,12 +6,18 @@ exports.createResource = async (req, res) => {
   try {
     const { title, description, type, url } = req.body;
     
+    // Check if a resource with the same title already exists
+    const existingResource = await Resource.findOne({ title });
+    if (existingResource) {
+      return res.status(400).json({ message: 'A resource with this title already exists' });
+    }
+    
     const resourceData = {
       title,
       description,
       type
     };
-
+    
     if (type === 'link') {
       resourceData.url = url;
     } else if (req.file) {
@@ -21,10 +27,9 @@ exports.createResource = async (req, res) => {
       resourceData.fileSize = req.file.size;
       resourceData.mimeType = req.file.mimetype;
     }
-
+    
     const resource = new Resource(resourceData);
     await resource.save();
-
     res.status(201).json({ resource });
   } catch (error) {
     console.error('Error creating resource:', error);
