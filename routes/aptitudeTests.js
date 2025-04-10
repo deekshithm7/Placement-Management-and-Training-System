@@ -241,26 +241,32 @@ router.get('/available', isAuthenticated, checkRole(['Student']), async (req, re
 router.post('/create', isAuthenticated, checkRole(['Coordinator']), async (req, res) => {
   try {
     const { title, description, questions, duration } = req.body;
-
+    
     // Validate duration
     if (!duration || duration <= 0) {
       return res.status(400).json({ message: 'Valid duration is required' });
     }
-
+    
     // Validate questions
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ message: 'At least one question is required' });
     }
-
+    
     // Validate each question
     for (const q of questions) {
-      if (!q.question || !q.options || q.options.length !== 4 || 
-          q.correctOption === undefined || q.correctOption < 0 || q.correctOption > 3 || 
+      if (!q.question || !q.options || q.options.length !== 4 ||
+          q.correctOption === undefined || q.correctOption < 0 || q.correctOption > 3 ||
           !q.marks || q.marks <= 0) {
         return res.status(400).json({ message: 'Invalid question format' });
       }
     }
-
+    
+    // Check if a test with the same title already exists
+    const existingTest = await AptitudeTest.findOne({ title });
+    if (existingTest) {
+      return res.status(409).json({ message: 'An aptitude test with this title already exists' });
+    }
+    
     const newTest = new AptitudeTest({
       title,
       description,
@@ -268,7 +274,7 @@ router.post('/create', isAuthenticated, checkRole(['Coordinator']), async (req, 
       duration,
       createdBy: req.user._id
     });
-
+    
     await newTest.save();
     res.status(201).json({ message: 'Aptitude test created successfully', test: newTest });
   } catch (error) {
