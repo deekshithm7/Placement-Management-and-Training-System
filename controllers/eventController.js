@@ -41,26 +41,35 @@ const getEvents = async (req, res) => {
 // Create a new event
 const createEvent = async (req, res) => {
   console.log('Received event data:', req.body);
-
   const { title, mentor, description, date, time, venue, maxParticipants } = req.body;
+  
   if (!title || !mentor || !description || !date || !time || !venue) {
-    return res.status(400).json({ 
-      message: 'All fields (title, mentor, description, date, time, venue) are required' 
+    return res.status(400).json({
+      message: 'All fields (title, mentor, description, date, time, venue) are required'
     });
   }
-
+  
   try {
-    const event = new Event({ 
-      title, 
-      mentor, 
-      description, 
-      date, 
-      time, 
-      venue, 
+    // Check if an event with the same title already exists
+    const existingEvent = await Event.findOne({ title: title });
+    if (existingEvent) {
+      return res.status(409).json({
+        message: 'An event with this title already exists'
+      });
+    }
+    
+    const event = new Event({
+      title,
+      mentor,
+      description,
+      date,
+      time,
+      venue,
       maxParticipants // Optional, defaults to 100 if not provided
     });
+    
     const savedEvent = await event.save();
-
+    
     // Notify all students
     const students = await User.find({ role: 'Student' });
     if (students.length > 0) {
@@ -77,7 +86,7 @@ const createEvent = async (req, res) => {
           },
         }
       );
-
+      
       const eventDate = new Date(savedEvent.date);
       const formattedDate = eventDate.toLocaleDateString('en-US', {
         weekday: 'long',
@@ -85,39 +94,38 @@ const createEvent = async (req, res) => {
         month: 'long',
         day: 'numeric',
       });
-
+      
       const emailPromises = students.map(student =>
         sendEmail(
           student.email,
           `New Event: ${savedEvent.title}`,
           `<!DOCTYPE html>
-<html>
-<head><title>New Event Announcement</title></head>
-<body>
-    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif;">
-        <h2>New Event Announcement</h2>
-        <p>A new event has been scheduled. Check out the details below!</p>
-        
-        <div style="background-color:#f5f5f5; padding:15px; border-radius:5px; margin:20px 0; text-align:left;">
-            <h3 style="color:#3366cc;">${savedEvent.title}</h3>
-            <p><strong>Mentor:</strong> ${savedEvent.mentor}</p>
-            <p><strong>Description:</strong> ${savedEvent.description}</p>
-            <p><strong>Date:</strong> ${formattedDate}</p>
-            <p><strong>Time:</strong> ${savedEvent.time}</p>
-            <p><strong>Venue:</strong> ${savedEvent.venue}</p>
-            <p><strong>Maximum Participants:</strong> ${savedEvent.maxParticipants}</p>
-        </div>
-        
-        <p>To register for this event, please log in to your PMTS dashboard.</p>
-        <p>Don't miss this opportunity!</p>
-    </div>
-</body>
-</html>`
+          <html>
+          <head><title>New Event Announcement</title></head>
+          <body>
+            <div style="text-align:center; padding:20px; font-family:Arial,sans-serif;">
+              <h2>New Event Announcement</h2>
+              <p>A new event has been scheduled. Check out the details below!</p>
+              <div style="background-color:#f5f5f5; padding:15px; border-radius:5px; margin:20px 0; text-align:left;">
+                <h3 style="color:#3366cc;">${savedEvent.title}</h3>
+                <p><strong>Mentor:</strong> ${savedEvent.mentor}</p>
+                <p><strong>Description:</strong> ${savedEvent.description}</p>
+                <p><strong>Date:</strong> ${formattedDate}</p>
+                <p><strong>Time:</strong> ${savedEvent.time}</p>
+                <p><strong>Venue:</strong> ${savedEvent.venue}</p>
+                <p><strong>Maximum Participants:</strong> ${savedEvent.maxParticipants}</p>
+              </div>
+              <p>To register for this event, please log in to your PMTS dashboard.</p>
+              <p>Don't miss this opportunity!</p>
+            </div>
+          </body>
+          </html>`
         )
       );
+      
       await Promise.all(emailPromises);
     }
-
+    
     res.status(201).json(savedEvent);
   } catch (error) {
     console.error('Error creating event:', error);
