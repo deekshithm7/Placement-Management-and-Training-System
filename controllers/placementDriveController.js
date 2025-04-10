@@ -3,7 +3,6 @@ const User = require('../models/User');
 const xlsx = require('xlsx');
 const axios = require('axios');
 
-axios.defaults.baseURL = 'http://localhost:8080'; // Ensure consistency
 
 const sendPhaseEmail = async (students, phaseName, companyName, role, requirements, instructions) => {
   const studentEmails = students.map(student => student.email);
@@ -141,7 +140,21 @@ exports.createPlacementDrive = async (req, res) => {
 
 exports.getAllPlacementDrives = async (req, res) => {
   try {
-    const placementDrives = await PlacementDrive.find();
+    const year = req.query.year;
+    let query = {};
+    
+    // If year is provided, filter drives by that year
+    if (year) {
+      const startDate = new Date(`${year}-01-01`);
+      const endDate = new Date(`${year}-12-31`);
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+    
+    const placementDrives = await PlacementDrive.find(query)
+      .populate('applications.student', 'name email registrationNumber branch')
+      .populate('phases.shortlistedStudents', 'name email registrationNumber branch')
+      .populate('phases.unattendedStudents', 'name email registrationNumber branch');
+      
     res.status(200).json(placementDrives);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching placement drives', error: error.message });
