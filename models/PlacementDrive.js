@@ -22,6 +22,7 @@ const phaseSchema = new mongoose.Schema({
     required: true 
   },
   shortlistedStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  unattendedStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   requirements: { type: String, default: '' }, // New field
   instructions: { type: String, default: '' }, // New field
   createdAt: { type: Date, default: Date.now },
