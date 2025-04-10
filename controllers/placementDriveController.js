@@ -309,12 +309,7 @@ exports.addPhaseToDrive = async (req, res) => {
       if (!shortlistFile) {
         return res.status(400).json({ message: 'Shortlist file is required for subsequent phases' });
       }
-      
-      // Process shortlist file to get student IDs
       shortlistedStudents = await processExcelFile(shortlistFile, 'shortlist');
-      
-      // Process shortlisted IDs to ensure consistent format
-      shortlistedStudents = shortlistedStudents.map(id => id.toString());
       
       // Get previously shortlisted students
       const previousPhase = placementDrive.phases[placementDrive.phases.length - 1];
@@ -329,13 +324,6 @@ exports.addPhaseToDrive = async (req, res) => {
     console.log('Shortlisted Students:', shortlistedStudents);
     console.log('Previously Shortlisted:', previouslyShortlisted);
 
-    // Reset application statuses first to avoid conflicts
-    for (const app of placementDrive.applications) {
-      if (previouslyShortlisted.includes(app.student.toString())) {
-        app.status = 'Pending'; // Reset status for all previously shortlisted students
-      }
-    }
-
     // 1. Update selected students
     for (const studentId of shortlistedStudents) {
       const application = placementDrive.applications.find(app => app.student.toString() === studentId);
@@ -348,14 +336,14 @@ exports.addPhaseToDrive = async (req, res) => {
 
     // 2. Update rejected students (only those who were in previous phase but not now)
     if (placementDrive.phases.length > 0) {
-      const rejectedStudentIds = previouslyShortlisted.filter(id => !shortlistedStudents.includes(id));
-      
-      for (const studentId of rejectedStudentIds) {
-        const application = placementDrive.applications.find(app => app.student.toString() === studentId);
-        if (application) {
-          console.log(`Updating ${studentId} to Rejected (was previously shortlisted but not in current shortlist)`);
-          application.status = 'Rejected';
-          application.updatedAt = new Date();
+      for (const studentId of previouslyShortlisted) {
+        if (!shortlistedStudents.includes(studentId)) {
+          const application = placementDrive.applications.find(app => app.student.toString() === studentId);
+          if (application) {
+            console.log(`Updating ${studentId} to Rejected (was previously shortlisted)`);
+            application.status = 'Rejected';
+            application.updatedAt = new Date();
+          }
         }
       }
     }
@@ -383,41 +371,36 @@ exports.addPhaseToDrive = async (req, res) => {
     console.log('Selected Students:', selectedStudents.map(s => s._id.toString()));
 
     if (selectedStudents.length > 0) {
-      try {
-        if (phaseName === 'Final Selection') {
-          await User.updateMany(
-            { _id: { $in: shortlistedStudents } },
-            {
-              $push: {
-                notifications: {
-                  message: `🎉 Congratulations! You have been selected for ${placementDrive.companyName} (${placementDrive.role}).`,
-                  type: 'success',
-                  link: '/student/placement',
-                  relatedId: placementDrive._id,
-                },
+      if (phaseName === 'Final Selection') {
+        await User.updateMany(
+          { _id: { $in: shortlistedStudents } },
+          {
+            $push: {
+              notifications: {
+                message: `🎉 Congratulations! You have been selected for ${placementDrive.companyName} (${placementDrive.role}).`,
+                type: 'success',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
               },
-            }
-          );
-          await sendStatusEmail(selectedStudents, 'Selected', placementDrive.companyName, placementDrive.role, requirements, instructions);
-        } else {
-          await User.updateMany(
-            { _id: { $in: shortlistedStudents } },
-            {
-              $push: {
-                notifications: {
-                  message: `✅ You've been shortlisted for ${phaseName} - ${placementDrive.companyName} (${placementDrive.role})`,
-                  type: 'success',
-                  link: '/student/placement',
-                  relatedId: placementDrive._id,
-                },
+            },
+          }
+        );
+        await sendStatusEmail(selectedStudents, 'Selected', placementDrive.companyName, placementDrive.role, requirements, instructions);
+      } else {
+        await User.updateMany(
+          { _id: { $in: shortlistedStudents } },
+          {
+            $push: {
+              notifications: {
+                message: `✅ You've been shortlisted for ${phaseName} - ${placementDrive.companyName} (${placementDrive.role})`,
+                type: 'success',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
               },
-            }
-          );
-          await sendPhaseEmail(selectedStudents, phaseName, placementDrive.companyName, placementDrive.role, requirements, instructions);
-        }
-      } catch (emailError) {
-        console.error('Failed to send notification emails to selected students:', emailError);
-        // Continue execution - don't break the process if email fails
+            },
+          }
+        );
+        await sendPhaseEmail(selectedStudents, phaseName, placementDrive.companyName, placementDrive.role, requirements, instructions);
       }
     }
 
@@ -425,29 +408,24 @@ exports.addPhaseToDrive = async (req, res) => {
     if (placementDrive.phases.length > 1) {
       const rejectedStudentIds = previouslyShortlisted.filter(id => !shortlistedStudents.includes(id));
       if (rejectedStudentIds.length > 0) {
-        try {
-          const rejectedStudents = await User.find({ _id: { $in: rejectedStudentIds } });
-          console.log('Rejected Students:', rejectedStudents.map(s => s._id.toString()));
+        const rejectedStudents = await User.find({ _id: { $in: rejectedStudentIds } });
+        console.log('Rejected Students:', rejectedStudents.map(s => s._id.toString()));
 
-          if (rejectedStudents.length > 0) {
-            await User.updateMany(
-              { _id: { $in: rejectedStudentIds } },
-              {
-                $push: {
-                  notifications: {
-                    message: `Status Update: Your application for ${placementDrive.companyName} (${placementDrive.role}) has been updated.`,
-                    type: 'error',
-                    link: '/student/placement',
-                    relatedId: placementDrive._id,
-                  },
+        if (rejectedStudents.length > 0) {
+          await User.updateMany(
+            { _id: { $in: rejectedStudentIds } },
+            {
+              $push: {
+                notifications: {
+                  message: `Status Update: Your application for ${placementDrive.companyName} (${placementDrive.role}) has been updated.`,
+                  type: 'error',
+                  link: '/student/placement',
+                  relatedId: placementDrive._id,
                 },
-              }
-            );
-            await sendStatusEmail(rejectedStudents, 'Rejected', placementDrive.companyName, placementDrive.role);
-          }
-        } catch (emailError) {
-          console.error('Failed to send notification emails to rejected students:', emailError);
-          // Continue execution - don't break the process if email fails
+              },
+            }
+          );
+          await sendStatusEmail(rejectedStudents, 'Rejected', placementDrive.companyName, placementDrive.role);
         }
       }
     }
@@ -475,57 +453,118 @@ exports.endPlacementDrive = async (req, res) => {
       return res.status(400).json({ message: 'Final shortlist file is required' });
     }
 
-    const shortlistedStudents = await processExcelFile(shortlistFile, 'shortlist');
-    const students = await User.find({ _id: { $in: shortlistedStudents } });
+    // Process shortlist file and ensure all IDs are strings
+    let shortlistedStudents = await processExcelFile(shortlistFile, 'shortlist');
+    shortlistedStudents = shortlistedStudents.map(id => id.toString());
+    
+    console.log('Final Shortlisted Students:', shortlistedStudents);
 
-    placementDrive.applications = placementDrive.applications.map(app => {
-      if (shortlistedStudents.includes(app.student.toString())) {
-        return { ...app, status: 'Selected', updatedAt: new Date() };
+    // Create a deep copy of applications to avoid reference issues
+    const updatedApplications = placementDrive.applications.map(app => {
+      const appObj = app.toObject ? app.toObject() : { ...app };
+      const studentId = app.student.toString();
+      
+      if (shortlistedStudents.includes(studentId)) {
+        console.log(`Marking ${studentId} as Selected for final selection`);
+        appObj.status = 'Selected';
+      } else {
+        console.log(`Marking ${studentId} as Rejected for final selection`);
+        appObj.status = 'Rejected';
       }
-      return { ...app, status: 'Rejected', updatedAt: new Date() };
+      
+      appObj.updatedAt = new Date();
+      return appObj;
     });
 
+    // Update applications with the new statuses
+    placementDrive.applications = updatedApplications;
+
+    // Add final phase
     placementDrive.phases.push({
       name: 'Final Selection',
       shortlistedStudents,
       requirements,
       instructions,
     });
+    
     placementDrive.status = 'Completed';
     placementDrive.updatedAt = new Date();
+    
+    console.log('Applications before save:', placementDrive.applications.map(app => ({ 
+      student: typeof app.student === 'object' ? app.student.toString() : app.student, 
+      status: app.status
+    })));
+    
     await placementDrive.save();
 
-    if (students.length > 0) {
-      await User.updateMany(
-        { _id: { $in: shortlistedStudents } },
-        {
-          $push: {
-            notifications: {
-              message: `🎉 Congratulations! You have been selected for ${placementDrive.companyName} (${placementDrive.role}).`,
-              type: 'success',
-              link: '/student/placement',
-              relatedId: placementDrive._id,
+    // Notify selected students
+    try {
+      const selectedStudents = await User.find({ _id: { $in: shortlistedStudents } });
+      console.log('Selected Students for notification:', selectedStudents.map(s => s._id.toString()));
+
+      if (selectedStudents.length > 0) {
+        await User.updateMany(
+          { _id: { $in: shortlistedStudents } },
+          {
+            $push: {
+              notifications: {
+                message: `🎉 Congratulations! You have been selected for ${placementDrive.companyName} (${placementDrive.role}).`,
+                type: 'success',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
+              },
             },
-          },
-        }
-      );
-      await sendStatusEmail(students, 'Selected', placementDrive.companyName, placementDrive.role, requirements, instructions);
+          }
+        );
+        await sendStatusEmail(selectedStudents, 'Selected', placementDrive.companyName, placementDrive.role, requirements, instructions);
+      }
+    } catch (emailError) {
+      console.error('Failed to send notification emails to selected students:', emailError);
+      // Continue execution - don't break the process if email fails
     }
 
-    const notSelectedStudents = await User.find({
-      _id: { $in: placementDrive.applications.map(app => app.student) },
-      _id: { $nin: shortlistedStudents },
-    });
-    if (notSelectedStudents.length > 0) {
-      await sendStatusEmail(notSelectedStudents, 'Rejected', placementDrive.companyName, placementDrive.role);
+    // Notify rejected students
+    try {
+      // Fix the duplicate key issue in the query
+      const rejectedStudentIds = placementDrive.applications
+        .filter(app => app.status === 'Rejected')
+        .map(app => typeof app.student === 'object' ? app.student.toString() : app.student);
+      
+      console.log('Rejected Student IDs:', rejectedStudentIds);
+      
+      const notSelectedStudents = await User.find({
+        _id: { $in: rejectedStudentIds }
+      });
+      
+      console.log('Rejected Students for notification:', notSelectedStudents.map(s => s._id.toString()));
+
+      if (notSelectedStudents.length > 0) {
+        await User.updateMany(
+          { _id: { $in: rejectedStudentIds } },
+          {
+            $push: {
+              notifications: {
+                message: `Status Update: Your application for ${placementDrive.companyName} (${placementDrive.role}) has been updated.`,
+                type: 'error',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
+              },
+            }
+          }
+        );
+        await sendStatusEmail(notSelectedStudents, 'Rejected', placementDrive.companyName, placementDrive.role);
+      }
+    } catch (emailError) {
+      console.error('Failed to send notification emails to rejected students:', emailError);
+      // Continue execution - don't break the process if email fails
     }
 
     res.status(200).json({ message: 'Placement drive completed successfully', placementDrive });
   } catch (error) {
+    console.error('ERROR in endPlacementDrive:', error.message, error.stack);
     res.status(500).json({ message: 'Error ending placement drive', error: error.message });
   }
 };
-
 exports.getShortlistTemplate = (req, res) => {
   const workbook = xlsx.utils.book_new();
   const worksheet = xlsx.utils.json_to_sheet([{ Email: 'example@student.com' }]);

@@ -69,7 +69,13 @@ router.post(
   ]),
   addPhaseToDrive
 );
-router.post('/:id/end', isAuthenticated, checkRole(['Coordinator']), upload.single('shortlistFile'), endPlacementDrive);
+router.post(
+  '/:id/end',
+  isAuthenticated,
+  checkRole(['Coordinator']),
+  upload.fields([{ name: 'shortlistFile', maxCount: 1 }]), // Updated line
+  endPlacementDrive
+);
 
 // Student routes
 router.post('/apply/:id', isAuthenticated, checkRole(['Student']), applyToPlacementDrive);
