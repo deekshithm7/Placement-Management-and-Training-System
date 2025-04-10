@@ -87,7 +87,7 @@ exports.getNotifications = async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email }).select('notifications');
     if (!user) return res.status(404).json({ message: 'User not found' });
-
+    
     res.json({ notifications: user.notifications });
   } catch (error) {
     console.error('[FETCH-NOTIFICATIONS ERROR]', error.message);

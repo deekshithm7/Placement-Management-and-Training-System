@@ -36,6 +36,6 @@ router.get('/list', isAuthenticated, checkRole(['Advisor']), listStudents);
 router.put('/edit/:id', isAuthenticated, checkRole(['Advisor']), updateStudent);
 router.post('/bulk-edit', isAuthenticated, checkRole(['Advisor']), upload.single('studentFile'), editStudentsBulk);
 router.get('/edit-template', isAuthenticated, checkRole(['Advisor']), editStudentUploadTemplate);
-router.get('/placements/me', isAuthenticated, checkRole(['Student']), getCurrentStudent);
+
 
 module.exports = router;

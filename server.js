@@ -139,5 +139,5 @@ app.use('/api/placement-drives', require('./routes/placementDrives'));
 app.use('/api/advisors', advisorRoutes);
 app.use('/api/events', require('./routes/eventRoutes'));
 app.use('/api/analytics', analyticsRoutes);
-
+app.use('/notifications', notificationRoutes);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

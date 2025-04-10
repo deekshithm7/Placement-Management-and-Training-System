@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const applicationSchema = new mongoose.Schema({
   student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  status: { type: String, enum: ['Applied', 'Interview', 'Selected', 'Rejected'], default: 'Applied' },
+  status: { type: String, enum: ['Applied', 'Selected', 'Rejected'], default: 'Applied' },
   appliedAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

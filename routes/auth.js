@@ -376,38 +376,48 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
   res.redirect(`${process.env.FRONTEND_URL}/${req.user.role}`);
 });
 
-router.get('/me', async (req, res) => {
-  console.log('Session data:', req.session);
-  console.log('User /me:', req.user);
 
-  if (req.isAuthenticated()) {
-    try {
-      const user = await User.findOne({ email: req.user.email });
-      if (!user) return res.status(404).json({ message: 'User not found' });
 
-      console.log(`[ME] Authenticated user: ${user.email}`);
-      return res.json({
-        isAuthenticated: true,
-        user: {
-          _id: user._id,  // ✅ Add this line
-          email: user.email,
-          registrationNumber: user.registrationNumber,
-          role: user.role,
-          name: user.name || user.email,
-          batch: user.batch || null,
-          branch: user.branch || null
-        }
-      });
-    } catch (err) {
-      console.error(`[ME ERROR] Email: ${req.user.email}, Error: ${err.message}`);
-      return res.status(500).json({ message: 'Server error checking user details' });
+
+router.get('/profile', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Not authenticated' });
+  }
+
+  try {
+    const user = await User.findOne({ email: req.user.email })
+      .select('name email role registrationNumber batch semestersCompleted cgpa numberOfBacklogs branch phoneNumber createdAt updatedAt');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
-  } else {
-    console.log('[ME] No authenticated user');
-    return res.json({ isAuthenticated: false, user: null });
+
+    if (user.role !== 'Student') {
+      return res.status(403).json({ message: 'This endpoint is for students only' });
+    }
+
+    console.log(`[PROFILE] Fetched profile for: ${user.email}`);
+    res.json({
+      message: 'Profile fetched successfully',
+      profile: {
+        name: user.name,
+        email: user.email,
+        registrationNumber: user.registrationNumber,
+        batch: user.batch,
+        semestersCompleted: user.semestersCompleted,
+        cgpa: user.cgpa,
+        numberOfBacklogs: user.numberOfBacklogs,
+        branch: user.branch,
+        phoneNumber: user.phoneNumber,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    });
+  } catch (err) {
+    console.error(`[PROFILE ERROR] Email: ${req.user.email}, Error: ${err.message}`);
+    res.status(500).json({ message: 'Server error fetching profile' });
   }
 });
-
 
 // Forgot Password - Send OTP
 router.post('/forgot-password', async (req, res) => {

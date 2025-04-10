@@ -43,6 +43,59 @@ const sendPhaseEmail = async (students, phaseName, companyName, role, requiremen
   }
 };
 
+const sendStatusEmail = async (students, status, companyName, role, requirements, instructions) => {
+  try {
+    const emailPromises = students.map(student =>
+      axios.post(
+        'https://api.brevo.com/v3/smtp/email',
+        {
+          sender: { name: 'PMTS', email: process.env.BREVO_EMAIL },
+          to: [{ email: student.email }],
+          subject: status === 'Selected'
+            ? `🎉 Congratulations! Selected for ${companyName} (${role})`
+            : `😔 Application Update for ${companyName} (${role})`,
+          htmlContent: status === 'Selected'
+            ? `<!DOCTYPE html>
+<html>
+<head><title>Selection Notification</title></head>
+<body>
+    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif; color:#333;">
+        <h2 style="color:#28a745;">🎉 Congratulations!</h2>
+        <p>You have been <strong>selected</strong> for <strong>${companyName} - ${role}</strong>.</p>
+        <h3 style="color:#555;">Requirements</h3>
+        <p>${requirements || 'No specific requirements provided.'}</p>
+        <h3 style="color:#555;">Instructions</h3>
+        <p>${instructions || 'No additional instructions provided.'}</p>
+        <p>Please check your <a href="https://yourapp.com/student/placement" style="color:#007bff;">dashboard</a> for further updates.</p>
+    </div>
+</body>
+</html>`
+            : `<!DOCTYPE html>
+<html>
+<head><title>Application Update</title></head>
+<body>
+    <div style="text-align:center; padding:20px; font-family:Arial,sans-serif; color:#333;">
+        <h2 style="color:#dc3545;">😔 Application Update</h2>
+        <p>We're sorry, your application for <strong>${companyName} - ${role}</strong> has been <strong>rejected</strong>.</p>
+        <p>Don't be discouraged! There are more opportunities ahead.</p>
+        <p>Keep checking your <a href="https://yourapp.com/student/placement" style="color:#007bff;">dashboard</a> for future placement drives.</p>
+    </div>
+</body>
+</html>`,
+        },
+        {
+          headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json' },
+        }
+      )
+    );
+    await Promise.all(emailPromises);
+    console.log('Emails sent successfully');
+  } catch (error) {
+    console.error('Error sending emails:', error.response?.data || error.message);
+    throw new Error('Failed to send notification emails');
+  }
+};
+
 const sendApplicationEmail = async (student, placementDrive) => {
   console.log('DEBUG: Sending application email to:', student.email);
   try {
@@ -126,6 +179,72 @@ const sendDriveCreationEmail = async (students, placementDrive) => {
   }
 };
 
+const updateApplicationStatuses = async (placementDrive) => {
+  const phases = placementDrive.phases;
+  if (phases.length === 0) return;
+
+  const latestPhase = phases[phases.length - 1];
+  const isFinalSelection = latestPhase.name === 'Final Selection';
+
+  let eligibleStudents;
+  if (phases.length === 1) {
+    eligibleStudents = placementDrive.applications.map(app => app.student.toString());
+  } else {
+    const previousPhase = phases[phases.length - 2];
+    eligibleStudents = previousPhase.shortlistedStudents.map(s => s.toString());
+  }
+
+  const shortlistedStudents = latestPhase.shortlistedStudents.map(s => s.toString());
+  const notShortlisted = eligibleStudents.filter(student => !shortlistedStudents.includes(student));
+
+  // Update status to "Rejected" and notify only if not already rejected
+  for (const studentId of notShortlisted) {
+    const application = placementDrive.applications.find(app => app.student.toString() === studentId);
+    if (application && application.status === 'Applied') {
+      application.status = 'Rejected';
+      application.updatedAt = new Date();
+
+      await User.updateOne(
+        { _id: studentId },
+        {
+          $push: {
+            notifications: {
+              message: `😔 We're sorry, your application for ${placementDrive.companyName} - ${placementDrive.role} has been rejected.`,
+              type: 'error',
+              link: '/student/placement',
+              relatedId: placementDrive._id,
+            },
+          },
+        }
+      );
+    }
+  }
+
+  // Update status to "Selected" for final selection and notify
+  if (isFinalSelection) {
+    for (const studentId of shortlistedStudents) {
+      const application = placementDrive.applications.find(app => app.student.toString() === studentId);
+      if (application && application.status === 'Applied') {
+        application.status = 'Selected';
+        application.updatedAt = new Date();
+
+        await User.updateOne(
+          { _id: studentId },
+          {
+            $push: {
+              notifications: {
+                message: `🎉 Congratulations! You have been selected for ${placementDrive.companyName} - ${placementDrive.role}.`,
+                type: 'success',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
+              },
+            },
+          }
+        );
+      }
+    }
+  }
+};
 exports.createPlacementDrive = async (req, res) => {
   const { companyName, role, description, minCGPA, maxBacklogs, eligibleBranches, minSemestersCompleted, date } = req.body;
 
@@ -216,7 +335,7 @@ exports.getPlacementDriveById = async (req, res) => {
     const placementDrive = await PlacementDrive.findById(id)
       .populate('createdBy', 'name email')
       .populate('applications.student', 'name email registrationNumber branch') // Add 'branch'
-      .populate('phases.shortlistedStudents', 'name email registrationNumber');
+      .populate('phases.shortlistedStudents', 'name email registrationNumber branch');
 
     if (!placementDrive) {
       return res.status(404).json({ message: 'Placement drive not found' });
@@ -310,7 +429,7 @@ exports.updateApplicationStatus = async (req, res) => {
   const { status } = req.body;
 
   try {
-    if (!['Applied', 'Interview', 'Selected', 'Rejected'].includes(status)) {
+    if (!['Applied', 'Selected', 'Rejected'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
@@ -319,41 +438,58 @@ exports.updateApplicationStatus = async (req, res) => {
       return res.status(404).json({ message: 'Placement drive not found' });
     }
 
-    const application = placementDrive.applications.find(app => app.student.equals(studentId));
+    // Find or create application
+    let application = placementDrive.applications.find(app => app.student.equals(studentId));
     if (!application) {
-      return res.status(404).json({ message: 'Application not found' });
+      application = { student: studentId, status: 'Applied', updatedAt: new Date() };
+      placementDrive.applications.push(application);
     }
 
-    application.status = status;
-    application.updatedAt = new Date();
-    await placementDrive.save();
+    // Only proceed if status changes or shortlist needs syncing
+    const latestPhase = placementDrive.phases[placementDrive.phases.length - 1];
+    const studentIdStr = studentId.toString();
+    const isInShortlist = latestPhase && latestPhase.shortlistedStudents.some(id => id.toString() === studentIdStr);
 
-    // Notify student of status update
-    const student = await User.findById(studentId);
-    if (student) {
-      await User.updateOne(
-        { _id: studentId },
-        {
-          $push: {
-            notifications: {
-              message: `Application status updated to "${status}" for ${placementDrive.companyName} - ${placementDrive.role}`,
-              type: status === 'Selected' ? 'success' : 'info',
-              link: '/student/placement',
-              relatedId: placementDrive._id,
-            },
-          },
+    if (application.status !== status || (status === 'Selected' && !isInShortlist) || (status === 'Rejected' && isInShortlist)) {
+      application.status = status;
+      application.updatedAt = new Date();
+
+      // Sync the latest phase's shortlist
+      if (latestPhase) {
+        if (status === 'Selected' && !isInShortlist) {
+          latestPhase.shortlistedStudents.push(studentId);
+        } else if (status === 'Rejected' && isInShortlist) {
+          latestPhase.shortlistedStudents = latestPhase.shortlistedStudents.filter(id => id.toString() !== studentIdStr);
         }
-      );
-      // Optional: Send email for status update (not in original, but added for consistency)
-      await sendEmail(
-        student.email,
-        `Application Status Update: ${placementDrive.companyName} (${placementDrive.role})`,
-        `
-          <h2>Application Status Update</h2>
-          <p>Your application status for ${placementDrive.companyName} - ${placementDrive.role} has been updated to <strong>${status}</strong>.</p>
-          <p>Check your dashboard for more details!</p>
-        `
-      );
+      } else if (status === 'Selected') {
+        // If no phases exist yet, this shouldn’t happen in your flow, but handle it gracefully
+        return res.status(400).json({ message: 'No phases exist to add student to shortlist' });
+      }
+
+      await placementDrive.save();
+
+      const student = await User.findById(studentId);
+      if (student) {
+        const message = status === 'Selected'
+          ? `🎉 Congratulations! You have been selected for ${placementDrive.companyName} - ${placementDrive.role}.`
+          : status === 'Rejected'
+          ? `😔 We're sorry, your application for ${placementDrive.companyName} - ${placementDrive.role} has been rejected.`
+          : `Application status updated to "${status}" for ${placementDrive.companyName} - ${placementDrive.role}`;
+        await User.updateOne(
+          { _id: studentId },
+          {
+            $push: {
+              notifications: {
+                message,
+                type: status === 'Selected' ? 'success' : status === 'Rejected' ? 'error' : 'info',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
+              },
+            },
+          }
+        );
+        await sendStatusEmail([student], status, placementDrive.companyName, placementDrive.role);
+      }
     }
 
     res.status(200).json({ message: 'Application status updated successfully', placementDrive });
@@ -361,7 +497,6 @@ exports.updateApplicationStatus = async (req, res) => {
     res.status(500).json({ message: 'Error updating application status', error: error.message });
   }
 };
-
 exports.addPhaseToDrive = async (req, res) => {
   const { id } = req.params;
   const { phaseName, requirements, instructions } = req.body;
@@ -375,7 +510,7 @@ exports.addPhaseToDrive = async (req, res) => {
     if (placementDrive.status === 'Completed') {
       return res.status(400).json({ message: 'Cannot add phase to a completed drive' });
     }
-    if (!['Resume Screening', 'Written Test', 'Interview HR', 'Interview Technical', 'Aptitude Test', 'Coding Test'].includes(phaseName)) {
+    if (!['Resume Screening', 'Written Test', 'Interview HR', 'Interview Technical', 'Aptitude Test', 'Coding Test', 'Final Selection'].includes(phaseName)) {
       return res.status(400).json({ message: 'Invalid phase name' });
     }
 
@@ -385,8 +520,26 @@ exports.addPhaseToDrive = async (req, res) => {
     } else if (shortlistFile) {
       const workbook = xlsx.read(shortlistFile.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
-      const worksheet = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-      const emails = worksheet.map(row => row.Email?.trim().toLowerCase()).filter(email => email);
+      const worksheet = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+      
+      // Check for "Email" column in header (first row)
+      const headers = worksheet[0];
+      const emailColumnIndex = headers.findIndex(header => 
+        header && ['Email', 'email', 'Student Email'].includes(header.trim())
+      );
+      if (emailColumnIndex === -1) {
+        return res.status(400).json({ message: 'Excel sheet must contain an "Email" column (e.g., "Email", "email", or "Student Email")' });
+      }
+
+      // Extract emails from the data rows (skip header)
+      const dataRows = worksheet.slice(1);
+      const emails = dataRows
+        .map(row => row[emailColumnIndex]?.toString().trim().toLowerCase())
+        .filter(email => email);
+
+      if (emails.length === 0) {
+        return res.status(400).json({ message: 'No valid emails found in the Excel sheet' });
+      }
 
       const students = await User.find({
         email: { $in: emails.map(email => new RegExp(`^${email}$`, 'i')) },
@@ -411,22 +564,54 @@ exports.addPhaseToDrive = async (req, res) => {
     placementDrive.updatedAt = new Date();
     await placementDrive.save();
 
-    // Notify shortlisted students
+    await updateApplicationStatuses(placementDrive);
+    await placementDrive.save();
+
     if (students.length > 0) {
-      await User.updateMany(
-        { _id: { $in: shortlistedStudents } },
-        {
-          $push: {
-            notifications: {
-              message: `Shortlisted for ${phaseName} - ${placementDrive.companyName} (${placementDrive.role})`,
-              type: 'success',
-              link: '/student/placement',
-              relatedId: placementDrive._id,
+      if (phaseName === 'Final Selection') {
+        await User.updateMany(
+          { _id: { $in: shortlistedStudents } },
+          {
+            $push: {
+              notifications: {
+                message: `🎉 Congratulations! You have been selected for ${placementDrive.companyName} (${placementDrive.role}).`,
+                type: 'success',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
+              },
             },
-          },
-        }
-      );
-      await sendPhaseEmail(students, phaseName, placementDrive.companyName, placementDrive.role, requirements, instructions);
+          }
+        );
+        await sendStatusEmail(students, 'Selected', placementDrive.companyName, placementDrive.role, requirements, instructions);
+      } else {
+        await User.updateMany(
+          { _id: { $in: shortlistedStudents } },
+          {
+            $push: {
+              notifications: {
+                message: `✅ You’ve been shortlisted for ${phaseName} - ${placementDrive.companyName} (${placementDrive.role})`,
+                type: 'success',
+                link: '/student/placement',
+                relatedId: placementDrive._id,
+              },
+            },
+          }
+        );
+        await sendStatusEmail(students, 'Shortlisted', placementDrive.companyName, placementDrive.role, requirements, instructions);
+      }
+    }
+
+    const eligibleStudents = placementDrive.phases.length === 1
+      ? placementDrive.applications.map(app => app.student.toString())
+      : placementDrive.phases[placementDrive.phases.length - 2].shortlistedStudents.map(s => s.toString());
+    const notShortlisted = eligibleStudents.filter(student => !shortlistedStudents.includes(student));
+    const newlyRejectedApplications = placementDrive.applications.filter(app => 
+      notShortlisted.includes(app.student.toString()) && app.status === 'Rejected' && app.updatedAt.getTime() === placementDrive.updatedAt.getTime()
+    );
+    const newlyRejectedStudents = await User.find({ _id: { $in: newlyRejectedApplications.map(app => app.student) } });
+
+    if (newlyRejectedStudents.length > 0) {
+      await sendStatusEmail(newlyRejectedStudents, 'Rejected', placementDrive.companyName, placementDrive.role);
     }
 
     res.status(200).json({ message: `Phase ${phaseName} added successfully`, placementDrive });
@@ -435,14 +620,10 @@ exports.addPhaseToDrive = async (req, res) => {
     res.status(500).json({ message: 'Error adding phase', error: error.message });
   }
 };
-
 exports.endPlacementDrive = async (req, res) => {
   const { id } = req.params;
   const shortlistFile = req.file;
   const { requirements, instructions } = req.body;
-
-  console.log('DEBUG: Entering endPlacementDrive, ID:', id);
-  console.log('DEBUG: Shortlist file:', shortlistFile ? shortlistFile.originalname : 'None');
 
   try {
     const placementDrive = await PlacementDrive.findById(id);
@@ -458,8 +639,26 @@ exports.endPlacementDrive = async (req, res) => {
 
     const workbook = xlsx.read(shortlistFile.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
-    const worksheet = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-    const emails = worksheet.map(row => row.Email?.trim().toLowerCase()).filter(email => email);
+    const worksheet = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+
+    // Check for "Email" column in header (first row)
+    const headers = worksheet[0];
+    const emailColumnIndex = headers.findIndex(header => 
+      header && ['Email', 'email', 'Student Email'].includes(header.trim())
+    );
+    if (emailColumnIndex === -1) {
+      return res.status(400).json({ message: 'Excel sheet must contain an "Email" column (e.g., "Email", "email", or "Student Email")' });
+    }
+
+    // Extract emails from the data rows (skip header)
+    const dataRows = worksheet.slice(1);
+    const emails = dataRows
+      .map(row => row[emailColumnIndex]?.toString().trim().toLowerCase())
+      .filter(email => email);
+
+    if (emails.length === 0) {
+      return res.status(400).json({ message: 'No valid emails found in the Excel sheet' });
+    }
 
     const students = await User.find({
       email: { $in: emails.map(email => new RegExp(`^${email}$`, 'i')) },
@@ -480,22 +679,24 @@ exports.endPlacementDrive = async (req, res) => {
     placementDrive.updatedAt = new Date();
     await placementDrive.save();
 
-    // Notify selected students
+    await updateApplicationStatuses(placementDrive);
+    await placementDrive.save();
+
     if (students.length > 0) {
-      await User.updateMany(
-        { _id: { $in: shortlistedStudents } },
-        {
-          $push: {
-            notifications: {
-              message: `Congratulations! Selected for ${placementDrive.companyName} (${placementDrive.role})`,
-              type: 'success',
-              link: '/student/placement',
-              relatedId: placementDrive._id,
-            },
-          },
-        }
-      );
-      await sendPhaseEmail(students, 'Final Selection', placementDrive.companyName, placementDrive.role, requirements, instructions);
+      await sendStatusEmail(students, 'Selected', placementDrive.companyName, placementDrive.role, requirements, instructions);
+    }
+
+    const eligibleStudents = placementDrive.phases.length > 1
+      ? placementDrive.phases[placementDrive.phases.length - 2].shortlistedStudents.map(s => s.toString())
+      : placementDrive.applications.map(app => app.student.toString());
+    const notShortlisted = eligibleStudents.filter(student => !shortlistedStudents.map(s => s.toString()).includes(student));
+    const newlyRejectedApplications = placementDrive.applications.filter(app => 
+      notShortlisted.includes(app.student.toString()) && app.status === 'Rejected' && app.updatedAt.getTime() === placementDrive.updatedAt.getTime()
+    );
+    const newlyRejectedStudents = await User.find({ _id: { $in: newlyRejectedApplications.map(app => app.student) } });
+
+    if (newlyRejectedStudents.length > 0) {
+      await sendStatusEmail(newlyRejectedStudents, 'Rejected', placementDrive.companyName, placementDrive.role);
     }
 
     res.status(200).json({ message: 'Placement drive ended successfully', placementDrive });
@@ -504,7 +705,6 @@ exports.endPlacementDrive = async (req, res) => {
     res.status(500).json({ message: 'Error ending placement drive', error: error.message });
   }
 };
-
 exports.getShortlistTemplate = (req, res) => {
   // Unchanged, no notification needed
   console.log('DEBUG: Entering getShortlistTemplate');

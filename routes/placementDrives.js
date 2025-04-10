@@ -13,6 +13,8 @@ const {
 const { isAuthenticated, checkRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
 const PlacementDrive = require('../models/PlacementDrive'); // Import the model
+const User = require('../models/User');
+
 const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
@@ -65,26 +67,40 @@ router.post('/:id/end', isAuthenticated, checkRole(['Coordinator']), upload.sing
 router.post('/apply/:id', isAuthenticated, checkRole(['Student']), applyToPlacementDrive);
 router.get('/student/:id', isAuthenticated, checkRole(['Student']), getPlacementDriveById);
 
-router.put('/status/:driveId/:studentId', isAuthenticated, checkRole(['Coordinator']), updateApplicationStatus);
+router.put('/status/:driveId/:studentId', isAuthenticated, checkRole(['Coordinator']), updateApplicationStatus);// manual override of status for editing student status after shortlist upload 
+
 router.post('/template', isAuthenticated, checkRole(['Coordinator']), getShortlistTemplate);
 
 router.get('/placements/me', isAuthenticated, checkRole(['Student']), async (req, res) => {
   try {
     const studentId = req.user._id;
-    const placementDrives = await PlacementDrive.find({ 'applications.student': studentId })
+    
+    // Get the full user with eligibleDrives populated
+    const user = await User.findById(studentId)
+      .populate('eligibleDrives')
+      .lean();
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Get all drives where the student has applied
+    const appliedDrives = await PlacementDrive.find({ 'applications.student': studentId })
       .populate('applications.student', 'name email registrationNumber')
       .populate('phases.shortlistedStudents', 'name email registrationNumber');
-
-    const drivesWithDetails = placementDrives.map(drive => {
+    
+    // Create a map of applied drives for quick lookup
+    const appliedDrivesMap = new Map();
+    appliedDrives.forEach(drive => {
       const currentPhase = drive.phases.length > 0 ? drive.phases[drive.phases.length - 1] : null;
       const studentApp = drive.applications.find(app => app.student._id.equals(studentId));
       const studentPhaseStatus = currentPhase 
         ? (currentPhase.shortlistedStudents.some(s => s._id.equals(studentId)) ? 'Shortlisted' : 'Rejected') 
         : null;
-
-      return {
+      
+      appliedDrivesMap.set(drive._id.toString(), {
         ...drive.toObject(),
-        status: studentApp ? studentApp.status : 'Not Applied',
+        status: studentApp ? studentApp.status : 'Applied',
         currentPhase: currentPhase ? {
           name: currentPhase.name,
           createdAt: currentPhase.createdAt,
@@ -92,14 +108,43 @@ router.get('/placements/me', isAuthenticated, checkRole(['Student']), async (req
           instructions: currentPhase.instructions,
         } : null,
         studentPhaseStatus,
+      });
+    });
+    
+    // Process all eligible drives
+    const eligibleDrivesProcessed = user.eligibleDrives.map(drive => {
+      const driveId = drive._id.toString();
+      // If the student has applied to this drive, use the detailed version
+      if (appliedDrivesMap.has(driveId)) {
+        return appliedDrivesMap.get(driveId);
+      }
+      
+      // Otherwise, mark as "Not Applied"
+      return {
+        ...drive,
+        status: 'Not Applied',
+        currentPhase: null,
+        studentPhaseStatus: null
       };
     });
-
-    res.status(200).json({ eligibleDrives: drivesWithDetails });
+    
+    res.status(200).json({ eligibleDrives: eligibleDrivesProcessed });
   } catch (error) {
+    console.error('Error in /placements/me:', error);
     res.status(500).json({ message: 'Error fetching student drives', error: error.message });
   }
 });
 
-
+router.get('/student/email/:email', isAuthenticated, checkRole(['Coordinator']), async (req, res) => {
+  try {
+    const { email } = req.params;
+    const student = await User.findOne({ email, role: 'Student' }); // Removed toLowerCase
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    res.status(200).json(student);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching student', error: error.message });
+  }
+});
 module.exports = router;
