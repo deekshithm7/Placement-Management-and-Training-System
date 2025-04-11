@@ -111,8 +111,19 @@ const processExcelFile = async (file, type) => {
 exports.createPlacementDrive = async (req, res) => {
   const { companyName, role, eligibleBranches, date } = req.body;
   try {
-    const placementDrive = new PlacementDrive({ companyName, role, eligibleBranches, date });
-    await placementDrive.save();
+    const placementDrive = new PlacementDrive({ companyName, role, eligibleBranches, date ,createdBy: req.user._id});
+    try {
+      console.log('Creating placement drive:', placementDrive);
+      await placementDrive.save();
+      console.log('Placement drive created:', placementDrive);
+    } catch (saveError) {
+      console.error('Error saving placement drive:', saveError);
+      return res.status(500).json({ 
+        message: 'Error saving placement drive', 
+        error: saveError.message,
+        details: saveError 
+      });
+    };
 
     const students = await User.find({ branch: { $in: eligibleBranches }, role: 'Student' });
     if (students.length > 0) {
@@ -129,7 +140,7 @@ exports.createPlacementDrive = async (req, res) => {
           },
         }
       );
-      await sendDriveCreationEmail(students, placementDrive);
+     // await sendDriveCreationEmail(students, placementDrive);
     }
 
     res.status(201).json({ message: 'Placement drive created successfully', placementDrive });

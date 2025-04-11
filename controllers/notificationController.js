@@ -1,4 +1,3 @@
-// backend/controllers/notificationController.js
 const User = require('../models/User');
 const PlacementDrive = require('../models/PlacementDrive'); // Optional, for relatedId usage
 

@@ -1,4 +1,3 @@
-// backend/middleware/authMiddleware.js
 const checkRole = (roles) => {
   return (req, res, next) => {
     console.log('Role Check:', {
