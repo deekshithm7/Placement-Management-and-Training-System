@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    font-family: "Poppins", sans-serif;
+    
+    /* Original landing page color system */
+    --primary-bg: #F1F5F9;
+    --secondary-bg: #FFFFFF;
+    --primary-accent: #1E40AF;
+    --secondary-accent: #3B82F6;
+    --success-color: #0D9488;
+    --highlight-color: #F59E0B;
+    --primary-text: #0F172A;
+    --secondary-text: #475569;
+    --muted-text: #94A3B8;
+    --link-text: #2563EB;
+
+    /* Dashboard color system with new identifiers */
+    --dashboard-primary-bg: #0F172A;
+    --dashboard-secondary-bg: #1E293B;
+    --dashboard-accent: #10B981;
+    --dashboard-highlight: #60A5FA;
+    --dashboard-text-primary: #F1F5F9;
+    --dashboard-text-secondary: #94A3B8;
+    --dashboard-error: #F87171;
+
+    /* Header-specific variables */
+    --header-bg: #0F172A; /* Dark background for the header */
+    --header-text: #FFFFFF; /* White text for the header */
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--primary-bg);
+    color: var(--primary-text);
+}
+
+/* Ensure header styles have high specificity */
+header.nav-header {
+    background-color: var(--header-bg) !important;
+}
+
+header.nav-header a,
+header.nav-header button,
+header.nav-header h1,
+header.nav-header svg {
+    color: var(--header-text) !important;
+}
+
+/* Dashboard-specific styles */
+.dashboard-glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-glass-light {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-glow {
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.7);
+}
+
+.dashboard-text-glow {
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5), 0 0 20px rgba(96, 165, 250, 0.3);
+}
+
+.dashboard-text-bg {
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.dashboard-full-bg {
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+:focus {
+    outline: 2px solid var(--highlight);
+    outline-offset: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
