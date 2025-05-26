@@ -129,23 +129,24 @@ npm run dev
 
 ## 📸 Screenshots
 
-### Landing Page
+### 🏠 Landing Page
 ![Landing Page](./frontend/src/assets/Result/Screenshot%202025-04-08%20231321.png)
 
-### Login Page
+### 🔐 Login Page
 ![Login Page](./frontend/src/assets/Result/Screenshot%2025-04-08%231544.png)
 
-### Coordintor Dashboard
-![Coordintor Dashboard](./frontend/src/assets/Result/Screenshot%2025-04-08%232428.png)
+### 👨‍💼 Coordinator Dashboard
+![Coordinator Dashboard](./frontend/src/assets/Result/Screenshot%2025-04-08%232428.png)
 
-### Advisor Dashboard
+### 🧑‍🏫 Advisor Dashboard
 ![Advisor Dashboard](./frontend/src/assets/Result/Screenshot%2025-04-08%233832.png)
 
-### Student Dashboard
+### 🎓 Student Dashboard
 ![Student Dashboard](./frontend/src/assets/Result/Screenshot%2025-04-08%234359.png)
 
-### Alumni Dashboard
+### 👨‍🎓 Alumni Dashboard
 ![Alumni Dashboard](./frontend/src/assets/Result/Screenshot%2025-04-08%235010.png)
+
 
 
 ---
