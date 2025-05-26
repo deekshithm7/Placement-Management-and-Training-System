@@ -130,7 +130,7 @@ npm run dev
 ## 📸 Screenshots
 
 #### 🧑‍🎓 Student Dashboard
-
+![Student Dashboard](\frontend\src\assets\Result\Screenshot 2025-04-08 231321.png)
 ---
 
 ## 🤝 Contributing
