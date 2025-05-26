@@ -54,17 +54,12 @@ A comprehensive **full-stack web application** built to modernize and streamline
 ### 🔹 Frontend
 - **React.js**
 - **Tailwind CSS**
-- **Axios**
-- **Lucide-react** (Icons)
 
 ### 🔹 Backend
 - **Node.js + Express.js**
 - **MongoDB + Mongoose**
-- **JWT Authentication**
+- **Session Authentication**
 - **Google OAuth**
-- **Multer** (file uploads)
-- **dotenv** (environment config)
-
 ---
 
 ## 🚀 Installation
@@ -94,7 +89,6 @@ BREVO_API_KEY=your_brevo_api_key_here
 GOOGLE_CLIENT_ID=your_google_client_id_here
 GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 
-JWT_SECRET=your_jwt_secret_here
 
 FRONTEND_URL=http://localhost:5173
 API_BASE_URL=http://localhost:8080
